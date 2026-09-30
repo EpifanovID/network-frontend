@@ -42,24 +42,14 @@
 }
 
 .passport {
-    position: absolute;
-
-    left: 20px;
-    bottom: 20px;
-
+    position: fixed;
     min-width: 250px;
-
     padding: 14px 16px;
-
     background: white;
-
     border: 1px solid #cccccc;
     border-radius: 8px;
-
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-
     font-size: 14px;
-
     z-index: 1000;
 }
 

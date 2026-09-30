@@ -1,10 +1,16 @@
-function Passport({ type, data }) {
-    if (!data) {
+function Passport({ type, data, position }) {
+    if (!data || !position) {
         return null;
     }
 
     return (
-        <div className="passport">
+        <div
+            className="passport"
+            style={{
+                left: `${position.x}px`,
+                top: `${position.y}px`,
+            }}
+        >
             {type === 'node' && (
                 <>
                     <div className="passport__title">

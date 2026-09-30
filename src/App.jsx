@@ -11,7 +11,7 @@ import Passport from './components/Passport';
 import '@xyflow/react/dist/style.css';
 import './App.css';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 
 const initialNodes = [
@@ -210,37 +210,215 @@ const nodeTypes = {
 
 function App() {
     const [passport, setPassport] = useState(null);
+    const [currentNodes, setCurrentNodes] = useState(nodes);
+    const [reactFlowInstance, setReactFlowInstance] = useState(null);
+    const [viewport, setViewport] = useState(null);
+
+    function getNodeScreenPosition(nodeId) {
+        if (!reactFlowInstance) {
+            return null;
+        }
+
+        const node = currentNodes.find(
+            (node) => node.id === nodeId
+        );
+
+        if (!node) {
+            return null;
+        }
+
+        const nodeElement = document.querySelector(
+            `.react-flow__node[data-id="${nodeId}"]`
+        );
+
+        if (!nodeElement) {
+            return null;
+        }
+
+        const rect = nodeElement.getBoundingClientRect();
+
+        return {
+            x: rect.right + 15,
+            y: rect.top,
+        };
+    }
+
+    function updatePassportPosition() {
+        if (!passport || !reactFlowInstance) {
+            return;
+        }
+
+        if (passport.type === 'node') {
+            const position = getNodeScreenPosition(
+                passport.nodeId
+            );
+
+            if (position) {
+                setPassport((currentPassport) => ({
+                    ...currentPassport,
+                    position,
+                }));
+            }
+        }
+
+        if (
+            passport.type === 'edge' &&
+            passport.flowPosition
+        ) {
+            const position =
+                reactFlowInstance.flowToScreenPosition(
+                    passport.flowPosition
+                );
+
+            setPassport((currentPassport) => ({
+                ...currentPassport,
+                position,
+            }));
+        }
+    }
 
     return (
         <div className="app">
             <ReactFlow
-                nodes={nodes}
+                nodes={currentNodes}
                 edges={initialEdges}
                 nodeTypes={nodeTypes}
                 fitView
 
-                onNodeMouseEnter={(_, node) => {
+                nodesDraggable={false}
+
+                onInit={(instance) => {
+                    setReactFlowInstance(instance);
+                }}
+
+                onViewportChange={(newViewport) => {
+                    setViewport(newViewport);
+
+                    requestAnimationFrame(() => {
+                        if (!passport || !reactFlowInstance) {
+                            return;
+                        }
+
+                        if (passport.type === 'node') {
+                            const nodeElement =
+                                document.querySelector(
+                                    `.react-flow__node[data-id="${passport.nodeId}"]`
+                                );
+
+                            if (!nodeElement) {
+                                return;
+                            }
+
+                            const rect =
+                                nodeElement.getBoundingClientRect();
+
+                            setPassport((currentPassport) => ({
+                                ...currentPassport,
+                                position: {
+                                    x: rect.right + 15,
+                                    y: rect.top,
+                                },
+                            }));
+                        }
+
+                        if (
+                            passport.type === 'edge' &&
+                            passport.flowPosition
+                        ) {
+                            const position =
+                                reactFlowInstance.flowToScreenPosition(
+                                    passport.flowPosition
+                                );
+
+                            setPassport(
+                                (currentPassport) => ({
+                                    ...currentPassport,
+                                    position,
+                                })
+                            );
+                        }
+                    });
+                }}
+
+                onNodesChange={(changes) => {
+                    setCurrentNodes((currentNodes) => {
+                        let updatedNodes = [
+                            ...currentNodes,
+                        ];
+
+                        changes.forEach((change) => {
+                            if (
+                                change.type === 'position' &&
+                                change.position
+                            ) {
+                                updatedNodes =
+                                    updatedNodes.map(
+                                        (node) =>
+                                            node.id === change.id
+                                                ? {
+                                                      ...node,
+                                                      position:
+                                                          change.position,
+                                                  }
+                                                : node
+                                    );
+                            }
+                        });
+
+                        return updatedNodes;
+                    });
+                }}
+
+                onNodeClick={(_, node) => {
+                    const nodeElement =
+                        document.querySelector(
+                            `.react-flow__node[data-id="${node.id}"]`
+                        );
+
+                    if (!nodeElement) {
+                        return;
+                    }
+
+                    const rect =
+                        nodeElement.getBoundingClientRect();
+
                     setPassport({
                         type: 'node',
                         data: {
                             id: node.id,
                             ...node.data,
                         },
+                        nodeId: node.id,
+                        position: {
+                            x: rect.right + 15,
+                            y: rect.top,
+                        },
                     });
                 }}
 
-                onNodeMouseLeave={() => {
-                    setPassport(null);
-                }}
+                onEdgeClick={(event, edge) => {
+                    if (!reactFlowInstance) {
+                        return;
+                    }
 
-                onEdgeMouseEnter={(_, edge) => {
+                    const flowPosition =
+                        reactFlowInstance.screenToFlowPosition({
+                            x: event.clientX,
+                            y: event.clientY,
+                        });
+
                     setPassport({
                         type: 'edge',
                         data: edge,
+                        flowPosition,
+                        position: {
+                            x: event.clientX,
+                            y: event.clientY,
+                        },
                     });
                 }}
 
-                onEdgeMouseLeave={() => {
+                onPaneClick={() => {
                     setPassport(null);
                 }}
             >
@@ -249,10 +427,11 @@ function App() {
                 <MiniMap />
             </ReactFlow>
 
-            {passport && (
+            {passport && passport.position && (
                 <Passport
                     type={passport.type}
                     data={passport.data}
+                    position={passport.position}
                 />
             )}
         </div>
