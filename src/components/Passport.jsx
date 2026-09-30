@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 function Passport({ type, data, position }) {
     if (!data || !position) {
         return null;
@@ -46,6 +48,13 @@ function Passport({ type, data, position }) {
                             {data.type}
                         </span>
                     </div>
+
+                    <Link
+                        to={`/objects/${data.id}`}
+                        className="passport__link"
+                    >
+                        Открыть структуру объекта →
+                    </Link>
                 </>
             )}
 

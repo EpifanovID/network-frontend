@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<tree
+    id="object-1"
+    name="Объект 1"
+>
+    <node
+        id="1"
+        name="Узел A"
+        type="node"
+    >
+        <node
+            id="1.1"
+            name="Подсистема узла A"
+            type="subsystem"
+        >
+            <node
+                id="1.1.1"
+                name="Элемент A1"
+                type="element"
+            />
+
+            <node
+                id="1.1.2"
+                name="Элемент A2"
+                type="element"
+            />
+        </node>
+
+        <node
+            id="1.2"
+            name="Подсистема узла A 2"
+            type="subsystem"
+        >
+            <node
+                id="1.2.1"
+                name="Элемент A3"
+                type="element"
+            />
+
+            <node
+                id="1.2.2"
+                name="Элемент A4"
+                type="element"
+            />
+        </node>
+    </node>
+
+    <node
+        id="2"
+        name="Узел B"
+        type="node"
+    >
+        <node
+            id="2.1"
+            name="Подсистема узла B"
+            type="subsystem"
+        >
+            <node
+                id="2.1.1"
+                name="Элемент B1"
+                type="element"
+            />
+
+            <node
+                id="2.1.2"
+                name="Элемент B2"
+                type="element"
+            />
+        </node>
+    </node>
+</tree>
