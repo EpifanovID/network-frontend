@@ -1,5 +1,4 @@
 import { Background, Controls, ReactFlow } from '@xyflow/react';
-import dagre from '@dagrejs/dagre';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import Toolbar from '../components/Toolbar';
@@ -19,6 +18,7 @@ const edgePairs = [
 
 const NODE_WIDTH = 132;
 const NODE_HEIGHT = 84;
+const FREE_GRAPH_PROJECTION_SCALE = 16;
 const OBJECT_LOCATIONS_KEY = 'network-frontend-object-locations';
 
 function readObjectLocations() {
@@ -93,40 +93,42 @@ function getConnectionHandles(source, target) {
     return { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
 }
 
-function layoutFreeGraph(nodes, edges) {
-    const graph = new dagre.graphlib.Graph();
-    graph.setDefaultEdgeLabel(() => ({}));
-    graph.setGraph({
-        rankdir: 'LR',
-        nodesep: 42,
-        ranksep: 70,
-        marginx: 24,
-        marginy: 24,
-    });
+function projectLocation({ lng, lat }) {
+    const maxMercatorLatitude = 85.0511287798066;
+    const latitude = Math.max(
+        -maxMercatorLatitude,
+        Math.min(maxMercatorLatitude, lat)
+    );
+    const sine = Math.sin((latitude * Math.PI) / 180);
 
-    nodes.forEach((node) => {
-        graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-    });
-    edges.forEach((edge) => {
-        graph.setEdge(edge.source, edge.target);
-    });
+    return {
+        x: ((lng + 180) / 360) * 256 * FREE_GRAPH_PROJECTION_SCALE,
+        y: (
+            0.5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI)
+        ) * 256 * FREE_GRAPH_PROJECTION_SCALE,
+    };
+}
 
-    dagre.layout(graph);
+function getMedian(values) {
+    const ordered = [...values].sort((left, right) => left - right);
+    const middle = Math.floor(ordered.length / 2);
+    return ordered.length % 2
+        ? ordered[middle]
+        : (ordered[middle - 1] + ordered[middle]) / 2;
+}
 
-    return nodes.map((node) => {
-        const position = graph.node(node.id);
-        return {
-            ...node,
-            position: { x: position.x, y: position.y },
-        };
-    });
+function getMedianCenter(points) {
+    return {
+        x: getMedian(points.map((point) => point.x)),
+        y: getMedian(points.map((point) => point.y)),
+    };
 }
 
 function buildGraph(map, objects = initialNodes) {
-    let nodes = objects.map((n) => {
+    const nodes = objects.map((n) => {
         const position = map && typeof map.project === 'function'
             ? map.project([n.lng, n.lat])
-            : { x: 0, y: 0 };
+            : projectLocation(n);
         return {
             id: n.id,
             type: 'networkNode',
@@ -142,10 +144,6 @@ function buildGraph(map, objects = initialNodes) {
         type: 'straight',
         style: { stroke: '#718096', strokeWidth: 2 },
     }));
-
-    if (!map || typeof map.project !== 'function') {
-        nodes = layoutFreeGraph(nodes, edges);
-    }
 
     const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
     edges = edges.map((edge) => ({
@@ -488,12 +486,82 @@ function NetworkPage() {
     const flowInstanceRef = useRef(null);
     const passportElementRef = useRef(null);
     const pendingFocusRef = useRef(null);
+    const flowSpreadFactorRef = useRef(1);
     const handleNodeClick = useCallback((nextPassport) => {
         setPassport(nextPassport);
     }, []);
 
     const handleEdgeClick = useCallback((nextPassport) => {
         setPassport(nextPassport);
+    }, []);
+
+    const handleFlowMove = useCallback((_, viewport) => {
+        const spreadFactor = Math.min(
+            6,
+            1 + Math.max(0, viewport.zoom - 1) * 0.8
+        );
+        const spreadChanged = (
+            Math.abs(spreadFactor - flowSpreadFactorRef.current) >= 0.08
+        );
+        const center = getMedianCenter(objects.map(projectLocation));
+        const flow = document.querySelector('.network-flow--interactive');
+
+        if (spreadChanged && flow) {
+            const bounds = flow.getBoundingClientRect();
+            const nextViewport = {
+                ...viewport,
+                x: bounds.width / 2 - center.x * viewport.zoom,
+                y: bounds.height / 2 - center.y * viewport.zoom,
+            };
+            flowSpreadFactorRef.current = spreadFactor;
+            flowInstanceRef.current?.setViewport(nextViewport, { duration: 0 });
+        }
+        if (!spreadChanged) return;
+
+        setNodes((current) => {
+            if (!current.length) return current;
+
+            const basePositions = current.map((node) => ({
+                id: node.id,
+                position: projectLocation({
+                    lng: node.data.lng,
+                    lat: node.data.lat,
+                }),
+            }));
+            const center = getMedianCenter(
+                basePositions.map((item) => item.position)
+            );
+            const positionById = new Map(
+                basePositions.map(({ id, position }) => [id, position])
+            );
+
+            return current.map((node) => {
+                const position = positionById.get(node.id);
+                return {
+                    ...node,
+                    position: {
+                        x: center.x + (position.x - center.x) * spreadFactor,
+                        y: center.y + (position.y - center.y) * spreadFactor,
+                    },
+                };
+            });
+        });
+    }, [objects]);
+
+    const handleFitGraph = useCallback(() => {
+        flowSpreadFactorRef.current = 1;
+        setNodes((current) => current.map((node) => ({
+            ...node,
+            position: projectLocation({
+                lng: node.data.lng,
+                lat: node.data.lat,
+            }),
+        })));
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                flowInstanceRef.current?.fitView({ padding: 0.2 });
+            });
+        });
     }, []);
 
     const handleCoordinatesChange = useCallback(({ id, lng, lat }) => {
@@ -557,6 +625,7 @@ function NetworkPage() {
 
     const handleMapToggle = () => {
         if (isMapVisible) {
+            flowSpreadFactorRef.current = 1;
             const { nodes: nextNodes, edges: nextEdges } = buildGraph(null, objects);
             setNodes(nextNodes);
             setEdges(nextEdges);
@@ -566,12 +635,6 @@ function NetworkPage() {
         }
         setIsMapVisible((visible) => !visible);
     };
-
-    useEffect(() => {
-        if (!isMapVisible) {
-            flowInstanceRef.current?.fitView({ padding: 0.2 });
-        }
-    }, [isMapVisible]);
 
     return (
         <div className="app">
@@ -598,10 +661,14 @@ function NetworkPage() {
                     nodes={nodes}
                     edges={edges}
                     nodeTypes={nodeTypes}
-                    fitView={false}
+                    fitView
+                    fitViewOptions={{ padding: 0.2 }}
+                    minZoom={0.1}
+                    maxZoom={8}
                     onInit={(instance) => {
                         flowInstanceRef.current = instance;
                     }}
+                    onMove={handleFlowMove}
                     nodeOrigin={[0.5, 0.5]}
                     nodesDraggable={false}
                     nodesConnectable={false}
@@ -636,7 +703,24 @@ function NetworkPage() {
                     onPaneClick={() => setPassport(null)}
                 >
                     <Background color="#d6dee8" gap={24} size={1} />
-                    <Controls showInteractive={false} />
+                    <Controls showInteractive={false} showFitView={false}>
+                        <button
+                            type="button"
+                            className="react-flow__controls-button"
+                            title="Fit View"
+                            aria-label="Fit View"
+                            onClick={handleFitGraph}
+                        >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"
+                                    fill="none"
+                                    stroke="#40536a"
+                                    strokeWidth="2"
+                                />
+                            </svg>
+                        </button>
+                    </Controls>
                 </ReactFlow>
             )}
 
