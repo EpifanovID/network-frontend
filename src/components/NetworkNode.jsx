@@ -5,10 +5,11 @@ import antenna1 from '../assets/icons/antenna_1.svg';
 import antenna2 from '../assets/icons/antenna_2.svg';
 import antenna3 from '../assets/icons/antenna_3.svg';
 
+// Ключ — номер дерева (treeNumber), значение — иконка
 const icons = {
-    antenna1,
-    antenna2,
-    antenna3,
+    1: antenna1,
+    2: antenna2,
+    3: antenna3,
 };
 
 function getHandleClassName(handleId, connectedHandles) {
@@ -21,7 +22,8 @@ function getHandleClassName(handleId, connectedHandles) {
 
 
 function NetworkNode({ data }) {
-    const icon = icons[data.type] || antenna1;
+    // Иконка выбирается по номеру дерева, а не по data.type
+    const icon = icons[data.treeNumber] || antenna1;
 
     return (
         <div className="network-node">

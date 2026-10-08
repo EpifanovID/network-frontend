@@ -7,20 +7,23 @@ import {
 
 import { useState } from 'react';
 
+import Toolbar from '../components/Toolbar';
+import PhysicalMap from '../components/PhysicalMap';
+
 import NetworkNode from '../components/NetworkNode';
 import Passport from '../components/Passport';
 
 import '@xyflow/react/dist/style.css';
 import '../App.css';
 
-const initialNodes = [
+export const initialNodes = [
     {
         id: '1',
         type: 'networkNode',
         position: { x: 100, y: 100 },
         data: {
             label: 'Объект 1',
-            type: 'antenna1',
+            treeNumber: '1',
         },
     },
     {
@@ -29,7 +32,7 @@ const initialNodes = [
         position: { x: 400, y: 50 },
         data: {
             label: 'Объект 2',
-            type: 'antenna2',
+            treeNumber: '2',
         },
     },
     {
@@ -38,7 +41,7 @@ const initialNodes = [
         position: { x: 200, y: 400 },
         data: {
             label: 'Объект 3',
-            type: 'antenna3',
+            treeNumber: '3',
         },
     },
     {
@@ -47,7 +50,7 @@ const initialNodes = [
         position: { x: 700, y: 150 },
         data: {
             label: 'Объект 4',
-            type: 'antenna1',
+            treeNumber: '1',
         },
     },
     {
@@ -56,7 +59,7 @@ const initialNodes = [
         position: { x: 900, y: 350 },
         data: {
             label: 'Объект 5',
-            type: 'antenna2',
+            treeNumber: '2',
         },
     },
     {
@@ -65,7 +68,7 @@ const initialNodes = [
         position: { x: 600, y: 400 },
         data: {
             label: 'Объект 6',
-            type: 'antenna1',
+            treeNumber: '1',
         },
     },
     {
@@ -74,7 +77,7 @@ const initialNodes = [
         position: { x: 0, y: 200 },
         data: {
             label: 'Объект 7',
-            type: 'antenna3',
+            treeNumber: '3',
         },
     },
     {
@@ -83,7 +86,7 @@ const initialNodes = [
         position: { x: 350, y: 200 },
         data: {
             label: 'Объект 8',
-            type: 'antenna1',
+            treeNumber: '1',
         },
     },
     {
@@ -92,7 +95,7 @@ const initialNodes = [
         position: { x: 350, y: 600 },
         data: {
             label: 'Объект 9',
-            type: 'antenna3',
+            treeNumber: '3',
         },
     },
     {
@@ -101,10 +104,17 @@ const initialNodes = [
         position: { x: 50, y: 500 },
         data: {
             label: 'Объект 10',
-            type: 'antenna1',
+            treeNumber: '1',
         },
     },
 ];
+
+export function getTreeNumberById(objectId) {
+    const node = initialNodes.find(
+        (n) => String(n.id) === String(objectId)
+    );
+    return node ? node.data.treeNumber : null;
+}
 
 function getConnectionHandles(source, target) {
     const dx =
@@ -158,7 +168,7 @@ function createEdge(id, sourceId, targetId) {
         id,
         source: sourceId,
         target: targetId,
-        type: 'straight',
+        type: 'arow',
         ...handles,
     };
 }
@@ -218,8 +228,24 @@ function NetworkPage() {
 
     const [, setViewport] = useState(null);
 
+    const [isMapVisible, setIsMapVisible] = useState(false);
+
     return (
         <div className="app">
+
+            <Toolbar
+                isMapVisible={isMapVisible}
+                onMapToggle={() => {
+                    setIsMapVisible(
+                        (value) => !value
+                    );
+                }}
+            />
+
+            {isMapVisible && (
+                <PhysicalMap />
+            )}
+
             <ReactFlow
                 nodes={currentNodes}
                 edges={initialEdges}
@@ -309,10 +335,10 @@ function NetworkPage() {
                                                     node.id ===
                                                     change.id
                                                         ? {
-                                                              ...node,
-                                                              position:
-                                                                  change.position,
-                                                          }
+                                                            ...node,
+                                                            position:
+                                                                change.position,
+                                                        }
                                                         : node
                                             );
                                     }
@@ -382,7 +408,6 @@ function NetworkPage() {
                     setPassport(null);
                 }}
             >
-                <Background />
                 <Controls />
                 <MiniMap />
             </ReactFlow>
@@ -394,6 +419,7 @@ function NetworkPage() {
                     position={passport.position}
                 />
             )}
+
         </div>
     );
 }

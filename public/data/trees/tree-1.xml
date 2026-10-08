@@ -45,28 +45,4 @@
             />
         </node>
     </node>
-
-    <node
-        id="2"
-        name="Узел B"
-        type="node"
-    >
-        <node
-            id="2.1"
-            name="Подсистема узла B"
-            type="subsystem"
-        >
-            <node
-                id="2.1.1"
-                name="Элемент B1"
-                type="element"
-            />
-
-            <node
-                id="2.1.2"
-                name="Элемент B2"
-                type="element"
-            />
-        </node>
-    </node>
 </tree>
