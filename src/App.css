@@ -9,19 +9,116 @@
     position: absolute;
     inset: 0;
     z-index: 1;
+    pointer-events: none;
+    background: transparent;
+}
+
+.app > .react-flow.network-flow--interactive {
+    pointer-events: auto;
+}
+
+.network-map-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.network-map-overlay__edges {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.network-map-overlay__edge {
+    stroke: #718096;
+    stroke-width: 2;
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+.network-map-overlay__edge-hit-area {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.network-map-overlay__edge-hit {
+    stroke: transparent;
+    stroke-width: 14;
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+.network-map-overlay__node {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    pointer-events: auto;
+    will-change: transform;
+}
+
+.app > .react-flow .react-flow__node,
+.app > .react-flow .react-flow__edge {
+    pointer-events: auto;
+}
+
+.app > .react-flow .react-flow__controls,
+.app > .react-flow .react-flow__minimap {
+    pointer-events: auto;
+}
+
+.network-flow--interactive .react-flow__controls {
+    overflow: hidden;
+    border: 1px solid #d5dfea;
+    border-radius: 10px;
+    box-shadow: 0 3px 12px rgba(25, 42, 62, 0.14);
+}
+
+.network-flow--interactive .react-flow__controls-button {
+    width: 34px;
+    height: 34px;
+    border-bottom-color: #e5eaf0;
+    background: #ffffff;
+    fill: #40536a;
 }
 
 .network-node {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    min-width: 104px;
+    padding: 10px 12px 8px;
+    border: 1px solid #dbe3ec;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 4px 14px rgba(35, 52, 71, 0.16);
+    transform: scale(var(--node-scale, 1));
+    transform-origin: center;
+    transition:
+        transform 120ms ease-out,
+        box-shadow 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.network-node:hover {
+    border-color: #93a9c2;
+    box-shadow: 0 7px 20px rgba(35, 52, 71, 0.22);
 }
 
 .network-node__icon {
-    width: 64px;
-    height: 64px;
+    width: 32px;
+    height: 32px;
     object-fit: contain;
+    pointer-events: auto;
 }
 
 .network-node__icon--selected {
@@ -29,11 +126,9 @@
 }
 
 .network-node__label {
-    padding: 4px 8px;
-    border-radius: 4px;
-    background: white;
-    border: 1px solid #cccccc;
-    font-size: 14px;
+    color: #25364a;
+    font-size: 13px;
+    font-weight: 600;
     white-space: nowrap;
 }
 
@@ -86,12 +181,55 @@
     font-weight: 500;
 }
 
-.network-node__icon {
-    width: 64px;
-    height: 64px;
-    object-fit: contain;
+.passport__coordinates {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0;
+}
 
-    pointer-events: auto;
+.passport__coordinate-field {
+    display: grid;
+    gap: 4px;
+    color: #666666;
+    font-size: 12px;
+}
+
+.passport__coordinate-field input {
+    min-width: 0;
+    padding: 7px 8px;
+    border: 1px solid #cbd5df;
+    border-radius: 5px;
+    color: #25364a;
+    font: inherit;
+}
+
+.passport__coordinate-field input:focus {
+    border-color: #5d83aa;
+    outline: 2px solid rgba(93, 131, 170, 0.18);
+}
+
+.passport__coordinate-error {
+    grid-column: 1 / -1;
+    color: #b42318;
+    font-size: 12px;
+}
+
+.passport__action {
+    grid-column: 1 / -1;
+    padding: 8px 10px;
+    border: 1px solid #426b91;
+    border-radius: 6px;
+    background: #426b91;
+    color: #ffffff;
+    font: inherit;
+    cursor: pointer;
+}
+
+.passport__action--secondary {
+    border-color: #cbd5df;
+    background: #ffffff;
+    color: #34495e;
 }
 
 .object-page {
@@ -197,14 +335,17 @@
     line-height: 1;
 }
 
+.physical-map-wrapper {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
 .physical-map {
     position: absolute;
-
     inset: 0;
-
-    background: #e8edf0;
-
-    z-index: 0;
+    width: 100%;
+    height: 100%;
 }
 
 .physical-map__label {

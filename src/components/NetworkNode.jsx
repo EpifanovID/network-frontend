@@ -1,30 +1,8 @@
 import { Handle, Position } from '@xyflow/react';
-import { useState } from 'react';
 
-import antenna1 from '../assets/icons/antenna_1.svg';
-import antenna2 from '../assets/icons/antenna_2.svg';
-import antenna3 from '../assets/icons/antenna_3.svg';
-
-// Ключ — номер дерева (treeNumber), значение — иконка
-const icons = {
-    1: antenna1,
-    2: antenna2,
-    3: antenna3,
-};
-
-function getHandleClassName(handleId, connectedHandles) {
-    return `network-node__handle ${
-        connectedHandles.has(handleId)
-            ? 'network-node__handle--connected'
-            : ''
-    }`;
-}
-
+import NetworkNodeContent from './NetworkNodeContent';
 
 function NetworkNode({ data }) {
-    // Иконка выбирается по номеру дерева, а не по data.type
-    const icon = icons[data.treeNumber] || antenna1;
-
     return (
         <div className="network-node">
             {/* Верхняя сторона */}
@@ -57,25 +35,7 @@ function NetworkNode({ data }) {
                 className="network-node__handle"
             />
 
-            <img
-                src={icon}
-                alt={data.label}
-                className="network-node__icon"
-                onMouseEnter={() => {
-                    if (data.onMouseEnter) {
-                        data.onMouseEnter();
-                    }
-                }}
-                onMouseLeave={() => {
-                    if (data.onMouseLeave) {
-                        data.onMouseLeave();
-                    }
-                }}
-            />
-
-            <div className="network-node__label">
-                {data.label}
-            </div>
+            <NetworkNodeContent data={data} />
 
             {/* Правая сторона */}
             <Handle

@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import ObjectTree from '../components/ObjectTree';
-import { initialNodes } from './NetworkPage';
+import { initialNodes } from '../data/networkData';
 
 function ObjectPage() {
     const { objectId } = useParams();
