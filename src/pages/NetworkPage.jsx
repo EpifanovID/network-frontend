@@ -496,6 +496,16 @@ function NetworkPage() {
     }, []);
 
     const handleFlowMove = useCallback((_, viewport) => {
+        const flow = document.querySelector('.network-flow--interactive');
+        if (flow) {
+            const iconScale = String(
+                Math.min(2.5, Math.max(1, viewport.zoom)) / viewport.zoom
+            );
+            if (flow.style.getPropertyValue('--flow-icon-scale') !== iconScale) {
+                flow.style.setProperty('--flow-icon-scale', iconScale);
+            }
+        }
+
         const spreadFactor = Math.min(
             6,
             1 + Math.max(0, viewport.zoom - 1) * 0.8
@@ -504,7 +514,6 @@ function NetworkPage() {
             Math.abs(spreadFactor - flowSpreadFactorRef.current) >= 0.08
         );
         const center = getMedianCenter(objects.map(projectLocation));
-        const flow = document.querySelector('.network-flow--interactive');
 
         if (spreadChanged && flow) {
             const bounds = flow.getBoundingClientRect();
@@ -667,6 +676,7 @@ function NetworkPage() {
                     maxZoom={8}
                     onInit={(instance) => {
                         flowInstanceRef.current = instance;
+                        handleFlowMove(null, instance.getViewport());
                     }}
                     onMove={handleFlowMove}
                     nodeOrigin={[0.5, 0.5]}

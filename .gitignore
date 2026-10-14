@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 dist
+public/maps/network-areas.pmtiles
+public/maps/network-overview.pmtiles
 .env
 .env.local
 dist-ssr

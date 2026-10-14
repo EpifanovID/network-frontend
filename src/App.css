@@ -90,6 +90,15 @@
     fill: #40536a;
 }
 
+.network-flow--interactive {
+    --flow-icon-scale: 1;
+}
+
+.network-flow--interactive .network-node__icon {
+    transform: scale(var(--flow-icon-scale));
+    transform-origin: center;
+}
+
 .network-node {
     display: flex;
     flex-direction: column;
@@ -115,8 +124,8 @@
 }
 
 .network-node__icon {
-    width: 32px;
-    height: 32px;
+    width: 22px;
+    height: 22px;
     object-fit: contain;
     pointer-events: auto;
 }
@@ -346,6 +355,25 @@
     inset: 0;
     width: 100%;
     height: 100%;
+}
+
+.physical-map__offline-error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    width: min(520px, calc(100vw - 48px));
+    padding: 18px 22px;
+    transform: translate(-50%, -50%);
+    border: 1px solid #e4c6c6;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 6px 24px rgba(35, 52, 71, 0.18);
+    color: #753b3b;
+    font-size: 14px;
+    line-height: 1.5;
+    text-align: center;
+    white-space: pre-line;
 }
 
 .physical-map__label {
