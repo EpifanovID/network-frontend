@@ -16,8 +16,8 @@ const edgePairs = [
     ['5', '6'], ['5', '9'], ['6', '9'], ['7', '8'],
 ];
 
-const NODE_WIDTH = 132;
-const NODE_HEIGHT = 84;
+const NODE_WIDTH = 94;
+const NODE_HEIGHT = 48;
 const FREE_GRAPH_PROJECTION_SCALE = 16;
 const OBJECT_LOCATIONS_KEY = 'network-frontend-object-locations';
 

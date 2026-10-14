@@ -16,6 +16,9 @@
   [OFL.txt](./OFL.txt).
 - The light sprite uses icons derived from Tangram Icons, licensed under MIT;
   see [TANGRAM-ICONS-LICENSE.txt](./TANGRAM-ICONS-LICENSE.txt).
+- Military-district outlines use geoBoundaries ADM1 data derived from
+  OpenStreetMap and distributed under the ODbL. The administrative units are
+  grouped according to Presidential Decree No. 141 of February 26, 2024.
 
 The map displays visible OpenStreetMap and Protomaps attribution. Preserve
 these notices when redistributing the generated PMTiles archive or map assets.

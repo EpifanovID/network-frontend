@@ -21,6 +21,7 @@ const mapAssetsUrl = new URL(
 ).toString().replace(/\/$/, '');
 const offlineArchiveUrl = `${mapAssetsUrl}/network-areas.pmtiles`;
 const offlineOverviewUrl = `${mapAssetsUrl}/network-overview.pmtiles`;
+const militaryDistrictsUrl = `${mapAssetsUrl}/military-districts.geojson`;
 const detailZoom = 9;
 const detailLayers = layers('protomaps', LIGHT, { lang: 'ru' })
     .filter((layer) => (
@@ -55,6 +56,11 @@ const offlineStyle = {
             url: `pmtiles://${offlineArchiveUrl}`,
             attribution: '© OpenStreetMap contributors · Protomaps',
         },
+        militaryDistricts: {
+            type: 'geojson',
+            data: militaryDistrictsUrl,
+            attribution: 'Границы военных округов по субъектам: Указ Президента РФ № 141 от 26.02.2024',
+        },
     },
     glyphs: `${mapAssetsUrl}/fonts/{fontstack}/{range}.pbf`,
     sprite: `${mapAssetsUrl}/sprites/light`,
@@ -63,6 +69,59 @@ const offlineStyle = {
             .filter((layer) => layer.id === 'background'),
         ...overviewLayers,
         ...detailLayers,
+        {
+            id: 'military-districts-fill',
+            type: 'fill',
+            source: 'militaryDistricts',
+            filter: ['==', ['get', 'kind'], 'district'],
+            minzoom: 2,
+            paint: {
+                'fill-color': [
+                    'match',
+                    ['get', 'district'],
+                    'Ленинградский военный округ', '#4f83a8',
+                    'Московский военный округ', '#bd6957',
+                    'Южный военный округ', '#c89a43',
+                    'Центральный военный округ', '#69916b',
+                    'Восточный военный округ', '#8972a6',
+                    '#888888',
+                ],
+                'fill-opacity': 0.07,
+            },
+        },
+        {
+            id: 'military-districts-outline',
+            type: 'line',
+            source: 'militaryDistricts',
+            filter: ['==', ['get', 'kind'], 'district'],
+            minzoom: 2,
+            paint: {
+                'line-color': '#7e352c',
+                'line-width': ['interpolate', ['linear'], ['zoom'], 2, 1.2, 7, 2.4],
+                'line-dasharray': [2, 1],
+                'line-opacity': 0.9,
+            },
+        },
+        {
+            id: 'military-districts-labels',
+            type: 'symbol',
+            source: 'militaryDistricts',
+            filter: ['==', ['get', 'kind'], 'label'],
+            minzoom: 3,
+            layout: {
+                'text-field': ['get', 'district'],
+                'text-font': ['Noto Sans Regular'],
+                'text-size': ['interpolate', ['linear'], ['zoom'], 3, 10, 7, 13],
+                'text-max-width': 10,
+                'text-allow-overlap': false,
+                'text-ignore-placement': false,
+            },
+            paint: {
+                'text-color': '#592c27',
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 1.5,
+            },
+        },
     ],
 };
 

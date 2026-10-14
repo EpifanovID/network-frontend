@@ -72,6 +72,16 @@ If either local archive is missing or unavailable, the map displays an
 explicit setup message. Adding or moving objects requires regenerating the
 detailed archive so the offline coverage matches their coordinates.
 
+The map also displays the five military-district boundaries and labels. The
+outlines dissolve federal-subject boundaries according to Presidential Decree
+No. 141 of February 26, 2024. Regenerate the local GeoJSON layer with
+`npm run build:military-districts`; this downloads pinned geoBoundaries ADM1
+data derived from OpenStreetMap (2017 boundary snapshot). The Southern District
+includes Crimea, Sevastopol, Donetsk, Luhansk, Kherson, and Zaporizhzhia under
+the Russian administrative assignment. The four Ukrainian oblast outlines
+follow their full administrative extents, not current lines of control.
+See [map asset notices](./public/maps/ATTRIBUTION.md).
+
 ## Running the app
 
 Install dependencies with `npm install`, then run `npm run dev`.
