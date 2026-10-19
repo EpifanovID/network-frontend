@@ -2,11 +2,82 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## PostgreSQL-backed graph
+
+The network graph reads SFE nodes from `imc.thematic_layers_sfes` and direct
+SFE-to-SFE links from `imc.thematic_layers_sfe_linkings` (`id_ls_sfe`). Link
+targets stored as external catalogue records are not drawn as graph edges.
+Node labels come from `vr_code`; the node type and layer are read from the
+related IMC records.
+
+The source PostgreSQL schema and trigger definitions are in
+`database/migrations`. They were copied from the supplied IMC database scripts;
+the seed XML files, user records, and logs are intentionally not included.
+
+1. Install PostgreSQL and create an empty database named `imc_db`, or use an
+   already populated IMC database.
+2. Copy `.env.example` to `.env` and set `DATABASE_URL` to the local database.
+   Keep `.env` private; it is excluded from Git.
+3. For a new empty database, apply the supplied schema and frontend additions:
+
+   ```powershell
+   npm run db:migrate
+   ```
+
+   Run this with a database owner account that can create extensions and
+   objects as `postgres`. This installs the schema only; it does not import the
+   original XML seed data.
+4. For an existing database that already has the IMC schema, apply only the
+   frontend migration:
+
+   ```powershell
+   npm run db:migrate -- --existing-schema
+   ```
+
+   This creates the `imc.network_node_locations` table used to store map
+   coordinates separately from the supplied schema.
+5. If you want to import the original sample data, first back up the database.
+   The standard `init_files` set includes user accounts and password hashes.
+   Import it into an empty IMC schema, providing the extracted folder and its
+   configuration file:
+
+   ```powershell
+   npm run db:import -- --seed-dir "C:\path\to\imc_init\init_files" --config "C:\path\to\imc_init\config\imc_init_config.xml"
+   ```
+
+   The importer uses parameterized SQL, runs in one transaction, skips database-
+   managed dictionaries, and refuses to import if a target table already
+   contains records. It does not copy seed data or credentials into this
+   repository. Do not run the original initializer; it logs the database
+   password and builds SQL through string concatenation.
+6. Start the API and Vite in separate terminals:
+
+   ```powershell
+   npm run dev:api
+   npm run dev
+   ```
+
+The API binds to `127.0.0.1` by default and the Vite development server proxies
+`/api` requests to it. It returns all SFE nodes and direct SFE links. In
+map-free graph mode, nodes without coordinates are laid out automatically.
+Select a node, enter longitude and latitude in its passport, and save; the
+coordinates are persisted in PostgreSQL. The map displays located nodes only.
+The API has no authentication and is intended for local development; do not
+expose it to an untrusted network.
+The database account in `DATABASE_URL` needs read access to the IMC tables and
+`SELECT`, `INSERT`, and `UPDATE` access to `imc.network_node_locations`.
+
+To use the supplied IMC records, configure the API to connect to a database
+where those records have already been loaded. The old initialization utility
+is not run by this project. It logs database passwords and constructs SQL by
+string concatenation, so do not use it with untrusted XML or production
+credentials.
+
 ## Offline map
 
 The physical map uses two local PMTiles archives: an overview of Russia up to
-zoom 8, and detailed coverage within 25 km of each object in
-`src/data/networkData.js` from zoom 9 onward. Map tiles, style, sprites, and
+zoom 8, and detailed coverage within 25 km of every coordinate saved in
+`imc.network_node_locations` from zoom 9 onward. Map tiles, style, sprites, and
 glyphs are served by the app itself; the map makes no requests to an external
 map provider at runtime.
 
@@ -33,7 +104,7 @@ The generated archives are intentionally excluded from Git:
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\build-offline-map.ps1" -BuildRoot "D:\NetworkMapBuild"
    ```
 
-The script creates the coverage polygons locally from the object coordinates,
+The script creates the coverage polygons locally from the PostgreSQL object coordinates,
 downloads the Protomaps basemap builder and current Geofabrik Russia OSM
 extract, builds zoom levels through 15, and copies the clipped archive into
 `public/maps`. Completed downloads in the build cache are reused on restart.
@@ -69,8 +140,8 @@ visible map attribution and see [map asset notices](./public/maps/ATTRIBUTION.md
 before redistributing the generated archive.
 
 If either local archive is missing or unavailable, the map displays an
-explicit setup message. Adding or moving objects requires regenerating the
-detailed archive so the offline coverage matches their coordinates.
+explicit setup message. Assign coordinates to nodes first, then regenerate the
+detailed archive so offline coverage includes their locations.
 
 The map also displays the five military-district boundaries and labels. The
 outlines dissolve federal-subject boundaries according to Presidential Decree
@@ -84,7 +155,8 @@ See [map asset notices](./public/maps/ATTRIBUTION.md).
 
 ## Running the app
 
-Install dependencies with `npm install`, then run `npm run dev`.
+Install dependencies with `npm install`, configure PostgreSQL as described
+above, then run `npm run dev:api` and `npm run dev` in separate terminals.
 
 Currently, two official plugins are available:
 

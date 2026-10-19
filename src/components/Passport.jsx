@@ -12,17 +12,20 @@ function Passport({
     const [longitude, setLongitude] = useState(data?.lng ?? '');
     const [latitude, setLatitude] = useState(data?.lat ?? '');
     const [coordinateError, setCoordinateError] = useState('');
+    const [savingCoordinates, setSavingCoordinates] = useState(false);
 
     if (!data || !position) {
         return null;
     }
 
-    const handleCoordinatesSubmit = (event) => {
+    const handleCoordinatesSubmit = async (event) => {
         event.preventDefault();
         const lng = Number(longitude);
         const lat = Number(latitude);
         if (
-            !Number.isFinite(lng)
+            longitude.trim() === ''
+            || latitude.trim() === ''
+            || !Number.isFinite(lng)
             || !Number.isFinite(lat)
             || lng < -180
             || lng > 180
@@ -34,9 +37,16 @@ function Passport({
         }
 
         setCoordinateError('');
-        setLongitude(lng);
-        setLatitude(lat);
-        onCoordinatesChange?.({ id: data.id, lng, lat });
+        setSavingCoordinates(true);
+        try {
+            await onCoordinatesChange?.({ id: data.id, lng, lat });
+            setLongitude(lng);
+            setLatitude(lat);
+        } catch (error) {
+            setCoordinateError(error.message || 'Не удалось сохранить координаты.');
+        } finally {
+            setSavingCoordinates(false);
+        }
     };
 
     return (
@@ -80,7 +90,23 @@ function Passport({
                         </span>
 
                         <span className="passport__value">
-                            {data.type}
+                            {data.type || '—'}
+                        </span>
+                    </div>
+                    <div className="passport__row">
+                        <span className="passport__label">
+                            Шаблон:
+                        </span>
+                        <span className="passport__value">
+                            {data.templateName || '—'}
+                        </span>
+                    </div>
+                    <div className="passport__row">
+                        <span className="passport__label">
+                            Тематический срез:
+                        </span>
+                        <span className="passport__value">
+                            {data.layerName || '—'}
                         </span>
                     </div>
 
@@ -120,24 +146,29 @@ function Passport({
                         <button
                             className="passport__action"
                             type="submit"
+                            disabled={savingCoordinates}
                         >
-                            Сохранить и показать на карте
+                            {savingCoordinates ? 'Сохраняю…' : 'Сохранить и показать на карте'}
                         </button>
-                        <button
-                            className="passport__action passport__action--secondary"
-                            type="button"
-                            onClick={() => onFocusLocation?.(data.lng, data.lat)}
-                        >
-                            Показать текущее место
-                        </button>
+                        {Number.isFinite(data.lng) && Number.isFinite(data.lat) && (
+                            <button
+                                className="passport__action passport__action--secondary"
+                                type="button"
+                                onClick={() => onFocusLocation?.(data.lng, data.lat)}
+                            >
+                                Показать текущее место
+                            </button>
+                        )}
                     </form>
 
-                    <Link
-                        to={`/objects/${data.id}`}
-                        className="passport__link"
-                    >
-                        Открыть структуру объекта →
-                    </Link>
+                    {data.treeNumber && (
+                        <Link
+                            to={`/objects/${data.id}`}
+                            className="passport__link"
+                        >
+                            Открыть структуру объекта →
+                        </Link>
+                    )}
                 </>
             )}
 
@@ -176,6 +207,12 @@ function Passport({
                             {data.target}
                         </span>
                     </div>
+                    {data.label && (
+                        <div className="passport__row">
+                            <span className="passport__label">Связь:</span>
+                            <span className="passport__value">{data.label}</span>
+                        </div>
+                    )}
                 </>
             )}
         </div>

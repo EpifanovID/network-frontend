@@ -5,17 +5,26 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "node --watch server/index.js",
+    "start:api": "node server/index.js",
+    "db:import": "node scripts/import-imc-seed.js",
+    "db:migrate": "node scripts/migrate-db.js",
     "build": "vite build",
     "build:military-districts": "node scripts/build-military-districts.mjs",
     "lint": "eslint .",
+    "test": "node --test",
     "preview": "vite preview"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
     "@protomaps/basemaps": "^5.7.2",
     "@xyflow/react": "^12.11.6",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "fast-xml-parser": "^5.2.5",
     "maplibre-gl": "^6.13.0",
     "pmtiles": "^4.5.0",
+    "pg": "^8.16.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4"

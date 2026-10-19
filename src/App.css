@@ -5,6 +5,28 @@
     overflow: hidden;
 }
 
+.network-data-notice {
+    position: absolute;
+    top: 76px;
+    left: 16px;
+    z-index: 4;
+    max-width: min(620px, calc(100vw - 32px));
+    padding: 10px 14px;
+    border: 1px solid #d5dfea;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 3px 12px rgba(25, 42, 62, 0.14);
+    color: #34445a;
+    font-size: 13px;
+    line-height: 1.45;
+    pointer-events: auto;
+}
+
+.network-data-notice--error {
+    border-color: #e8b8b8;
+    color: #8f2525;
+}
+
 .app > .react-flow {
     position: absolute;
     inset: 0;
