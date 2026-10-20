@@ -9,6 +9,7 @@
     "start:api": "node server/index.js",
     "db:import": "node scripts/import-imc-seed.js",
     "db:migrate": "node scripts/migrate-db.js",
+    "db:seed-demo-nodes": "node scripts/seed-demo-nodes.js",
     "build": "vite build",
     "build:military-districts": "node scripts/build-military-districts.mjs",
     "lint": "eslint .",

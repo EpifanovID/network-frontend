@@ -10,6 +10,18 @@ targets stored as external catalogue records are not drawn as graph edges.
 Node labels come from `vr_code`; the node type and layer are read from the
 related IMC records.
 
+Each node passport links to `/objects/:id`, where the selected SFE is shown as
+the root of a tree built from its reachable outgoing SFE links. The tree uses
+the same database graph data as the network view.
+
+To create the example nodes УС4–УС9 and their sample connections, run
+`npm run db:seed-demo-nodes`. The command creates their SFE records, stores
+coordinates in `imc.network_node_locations`, and represents each connection
+with a line SFE and its two endpoint links in one transaction. It is safe to
+rerun and rejects conflicting node or line codes rather than overwriting
+existing objects. The graph API then loads the nodes, coordinates, and
+connections directly from PostgreSQL.
+
 The source PostgreSQL schema and trigger definitions are in
 `database/migrations`. They were copied from the supplied IMC database scripts;
 the seed XML files, user records, and logs are intentionally not included.

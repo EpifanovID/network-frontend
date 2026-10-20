@@ -212,6 +212,18 @@
     font-weight: 500;
 }
 
+.passport__link {
+    display: inline-block;
+    margin-top: 8px;
+    color: #426b91;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.passport__link:hover {
+    text-decoration: underline;
+}
+
 .passport__coordinates {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -271,13 +283,25 @@
 }
 
 .object-page__header {
-    height: 64px;
+    min-height: 64px;
     display: flex;
     align-items: center;
+    gap: 20px;
     padding: 0 24px;
     border-bottom: 1px solid #dddddd;
     background: #ffffff;
     box-sizing: border-box;
+}
+
+.object-page__back {
+    flex: 0 0 auto;
+    color: #426b91;
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.object-page__back:hover {
+    text-decoration: underline;
 }
 
 .object-page__header h1 {

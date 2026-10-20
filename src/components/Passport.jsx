@@ -9,8 +9,8 @@ function Passport({
     onCoordinatesChange,
     onFocusLocation,
 }) {
-    const [longitude, setLongitude] = useState(data?.lng ?? '');
-    const [latitude, setLatitude] = useState(data?.lat ?? '');
+    const [longitude, setLongitude] = useState(() => String(data?.lng ?? ''));
+    const [latitude, setLatitude] = useState(() => String(data?.lat ?? ''));
     const [coordinateError, setCoordinateError] = useState('');
     const [savingCoordinates, setSavingCoordinates] = useState(false);
 
@@ -40,8 +40,8 @@ function Passport({
         setSavingCoordinates(true);
         try {
             await onCoordinatesChange?.({ id: data.id, lng, lat });
-            setLongitude(lng);
-            setLatitude(lat);
+            setLongitude(String(lng));
+            setLatitude(String(lat));
         } catch (error) {
             setCoordinateError(error.message || 'Не удалось сохранить координаты.');
         } finally {
@@ -161,14 +161,12 @@ function Passport({
                         )}
                     </form>
 
-                    {data.treeNumber && (
-                        <Link
-                            to={`/objects/${data.id}`}
-                            className="passport__link"
-                        >
-                            Открыть структуру объекта →
-                        </Link>
-                    )}
+                    <Link
+                        to={`/objects/${data.id}`}
+                        className="passport__link"
+                    >
+                        Показать древовидную структуру →
+                    </Link>
                 </>
             )}
 
@@ -194,7 +192,7 @@ function Passport({
                         </span>
 
                         <span className="passport__value">
-                            {data.source}
+                            {data.sourceLabel || data.source}
                         </span>
                     </div>
 
@@ -204,13 +202,19 @@ function Passport({
                         </span>
 
                         <span className="passport__value">
-                            {data.target}
+                            {data.targetLabel || data.target}
                         </span>
                     </div>
                     {data.label && (
                         <div className="passport__row">
                             <span className="passport__label">Связь:</span>
                             <span className="passport__value">{data.label}</span>
+                        </div>
+                    )}
+                    {data.relationLabel && (
+                        <div className="passport__row">
+                            <span className="passport__label">Отношение:</span>
+                            <span className="passport__value">{data.relationLabel}</span>
                         </div>
                     )}
                 </>

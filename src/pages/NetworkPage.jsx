@@ -7,6 +7,8 @@ import PhysicalMap from '../components/PhysicalMap';
 import NetworkNode from '../components/NetworkNode';
 import NetworkNodeContent from '../components/NetworkNodeContent';
 import Passport from '../components/Passport';
+import { fetchJson } from '../utils/api';
+import { buildMapEdges } from '../utils/mapGraph';
 
 import '@xyflow/react/dist/style.css';
 import '../App.css';
@@ -139,6 +141,9 @@ function createEdgePassport(edge, position, anchorT = 0.5) {
             source: edge.source,
             target: edge.target,
             label: edge.label,
+            sourceLabel: edge.sourceLabel,
+            targetLabel: edge.targetLabel,
+            relationLabel: edge.relationLabel,
         },
         position,
         anchorT,
@@ -177,6 +182,7 @@ function MapGraphOverlay({
     const passportRef = useRef(null);
     const objectsRef = useRef(objects);
     const updateMapRef = useRef(null);
+    const hasInitialFitRef = useRef(false);
 
     useEffect(() => {
         passportRef.current = passport;
@@ -337,9 +343,10 @@ function MapGraphOverlay({
                     duration: 1200,
                 });
                 pendingFocusRef.current = null;
+                hasInitialFitRef.current = true;
             } else {
                 const locatedObjects = objectsRef.current.filter(hasCoordinates);
-                if (locatedObjects.length) {
+                if (locatedObjects.length && !hasInitialFitRef.current) {
                     const longitudes = locatedObjects.map((node) => node.lng);
                     const latitudes = locatedObjects.map((node) => node.lat);
                     map.fitBounds(
@@ -353,6 +360,7 @@ function MapGraphOverlay({
                             duration: 0,
                         }
                     );
+                    hasInitialFitRef.current = true;
                 }
             }
             update();
@@ -485,13 +493,9 @@ function NetworkPage() {
 
         async function loadGraph() {
             try {
-                const response = await fetch('/api/graph', {
+                const result = await fetchJson('/api/graph', {
                     signal: controller.signal,
                 });
-                const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.error || `Ошибка API: ${response.status}`);
-                }
                 if (!Array.isArray(result.nodes) || !Array.isArray(result.edges)) {
                     throw new TypeError('API вернул данные графа в неверном формате.');
                 }
@@ -570,15 +574,11 @@ function NetworkPage() {
     }, []);
 
     const handleCoordinatesChange = useCallback(async ({ id, lng, lat }) => {
-        const response = await fetch(`/api/nodes/${encodeURIComponent(id)}/location`, {
+        await fetchJson(`/api/nodes/${encodeURIComponent(id)}/location`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lng, lat }),
         });
-        const result = await response.json();
-        if (!response.ok) {
-            throw new Error(result.error || `Ошибка API: ${response.status}`);
-        }
 
         setObjects((current) => current.map((object) => (
             object.id === id
@@ -619,21 +619,16 @@ function NetworkPage() {
         }
     }, [isMapVisible, mapInstance]);
 
-    useEffect(() => {
-        const dismissPassport = (event) => {
-            if (!(event.target instanceof Element)) return;
-            if (event.target.closest(
-                '.passport, .network-map-overlay__node, .network-map-overlay__edge, '
-                + '.react-flow__node, .react-flow__edge'
-            )) {
-                return;
-            }
-            setPassport(null);
-        };
-
-        document.addEventListener('click', dismissPassport);
-        return () => document.removeEventListener('click', dismissPassport);
-    }, []);
+    const handleBackgroundClick = (event) => {
+        if (!(event.target instanceof Element)) return;
+        if (event.target.closest(
+            '.passport, .network-map-overlay__node, .network-map-overlay__edge, '
+            + '.network-map-overlay__edge-hit, .react-flow__node, .react-flow__edge'
+        )) {
+            return;
+        }
+        setPassport(null);
+    };
 
     const handleMapToggle = () => {
         if (isMapVisible) {
@@ -646,15 +641,18 @@ function NetworkPage() {
         setIsMapVisible((visible) => !visible);
     };
 
-    const locatedObjects = objects.filter(hasCoordinates);
-    const locatedIds = new Set(locatedObjects.map((node) => node.id));
-    const mapEdges = relations.filter(
-        (edge) => locatedIds.has(edge.source) && locatedIds.has(edge.target)
+    const locatedObjects = useMemo(
+        () => objects.filter(hasCoordinates),
+        [objects]
+    );
+    const mapEdges = useMemo(
+        () => buildMapEdges(objects, relations),
+        [objects, relations]
     );
     const unlocatedCount = objects.length - locatedObjects.length;
 
     return (
-        <div className="app">
+        <div className="app" onClickCapture={handleBackgroundClick}>
             <Toolbar
                 isMapVisible={isMapVisible}
                 onMapToggle={handleMapToggle}

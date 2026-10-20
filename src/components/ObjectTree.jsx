@@ -1,50 +1,16 @@
-import { useEffect, useState } from 'react';
 import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react';
 import dagre from '@dagrejs/dagre';
+import { useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 
-import { parseXmlTree } from '../utils/xmlTreeParser';
+import { buildObjectSubtree } from '../utils/objectTree';
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 60;
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
-function buildGraph(tree) {
-    const nodes = [];
-    const edges = [];
-
-    function addNode(node, parentId = null) {
-        nodes.push({
-            id: node.id,
-            position: { x: 0, y: 0 },
-            data: { label: node.name, type: node.type },
-            type: 'default',
-        });
-
-        if (parentId) {
-            edges.push({
-                id: `${parentId}-${node.id}`,
-                source: parentId,
-                target: node.id,
-                type: 'smoothstep',
-            });
-        }
-
-        (node.children || []).forEach((child) => {
-            addNode(child, node.id);
-        });
-    }
-
-    (tree.children || []).forEach((node) => {
-        addNode(node);
-    });
-
-    return { nodes, edges };
-}
-
 function layoutGraph(nodes, edges) {
+    const dagreGraph = new dagre.graphlib.Graph();
+    dagreGraph.setDefaultEdgeLabel(() => ({}));
     dagreGraph.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 100 });
 
     nodes.forEach((node) => {
@@ -72,62 +38,38 @@ function layoutGraph(nodes, edges) {
     });
 }
 
-function ObjectTree({ treeNumber }) {
-    const [nodes, setNodes] = useState([]);
-    const [edges, setEdges] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+function ObjectTree({ nodes: graphNodes, edges: graphEdges, rootId }) {
+    const tree = useMemo(
+        () => buildObjectSubtree(graphNodes, graphEdges, rootId),
+        [graphNodes, graphEdges, rootId]
+    );
+    const nodes = useMemo(
+        () => layoutGraph(
+            tree.nodes.map((node) => ({
+                id: node.id,
+                position: { x: 0, y: 0 },
+                data: {
+                    label: node.data.label,
+                    type: node.data.type,
+                },
+                type: 'default',
+            })),
+            tree.edges
+        ),
+        [tree]
+    );
 
-    useEffect(() => {
-        async function loadTree() {
-            try {
-                setLoading(true);
-                setError(null);
-
-                if (!treeNumber) {
-                    throw new Error('Не задан номер дерева');
-                }
-
-                const response = await fetch(
-                    `/data/trees/tree-${treeNumber}.xml`
-                );
-
-                if (!response.ok) {
-                    throw new Error(
-                        `Не удалось загрузить XML: ${response.status}`
-                    );
-                }
-
-                const xmlText = await response.text();
-                const tree = parseXmlTree(xmlText);
-                const graph = buildGraph(tree);
-                const laidOut = layoutGraph(graph.nodes, graph.edges);
-
-                setNodes(laidOut);
-                setEdges(graph.edges);
-            } catch (e) {
-                console.error(e);
-                setError(e.message);
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        loadTree();
-    }, [treeNumber]);
-
-    if (loading) {
+    if (nodes.length === 1) {
         return (
-            <div className="object-tree__status">
-                Загрузка структуры...
+            <div className="object-tree__status" role="status">
+                Для этого узла в базе нет дочерних связей.
             </div>
         );
     }
-
-    if (error) {
+    if (!nodes.length) {
         return (
-            <div className="object-tree__status">
-                Ошибка: {error}
+            <div className="object-tree__status" role="status">
+                Для объекта не найдена структура.
             </div>
         );
     }
@@ -136,7 +78,7 @@ function ObjectTree({ treeNumber }) {
         <div className="object-tree">
             <ReactFlow
                 nodes={nodes}
-                edges={edges}
+                edges={tree.edges}
                 fitView
                 nodesDraggable={false}
                 nodesConnectable={false}
