@@ -19,6 +19,9 @@
 - Military-district outlines use geoBoundaries ADM1 data derived from
   OpenStreetMap and distributed under the ODbL. The administrative units are
   grouped according to Presidential Decree No. 141 of February 26, 2024.
+- Regional boundaries use geoBoundaries ADM1 data derived from OpenStreetMap and
+  distributed under the ODbL. Run `npm run build:russia-regions` to regenerate
+  `russia-regions.geojson` from the pinned geoBoundaries revision.
 
 The map displays visible OpenStreetMap and Protomaps attribution. Preserve
 these notices when redistributing the generated PMTiles archive or map assets.

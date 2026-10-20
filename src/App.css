@@ -336,8 +336,8 @@
     left: 16px;
 
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
 
     padding: 6px;
 
@@ -388,6 +388,36 @@
 .toolbar__icon {
     font-size: 22px;
     line-height: 1;
+}
+
+.toolbar__layer-control {
+    display: grid;
+    gap: 3px;
+    min-width: 176px;
+}
+
+.toolbar__layer-label {
+    padding-left: 2px;
+    color: #536477;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.toolbar__layer-select {
+    width: 100%;
+    min-height: 34px;
+    padding: 5px 28px 5px 8px;
+    border: 1px solid #d5dfea;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #25364a;
+    font: inherit;
+    font-size: 12px;
+}
+
+.toolbar__layer-select:disabled {
+    color: #8b98a7;
+    background: #f3f5f7;
 }
 
 .physical-map-wrapper {

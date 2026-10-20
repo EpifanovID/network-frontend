@@ -143,6 +143,11 @@ regional context outside the detailed object areas.
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\build-offline-map.ps1" -BuildRoot "D:\NetworkMapBuild" -OverviewOnly
    ```
 
+Use the map control in the upper-left corner to choose a basemap, military
+district boundaries, or Russian regional boundaries. To regenerate the local
+regional GeoJSON from the pinned geoBoundaries ADM1 dataset, run
+`npm run build:russia-regions`.
+
 To avoid downloading a large optional popularity-ranking table, the build uses
 default POI zoom rules rather than QRank prominence. This does not remove OSM
 roads, places, or POI features from the map.

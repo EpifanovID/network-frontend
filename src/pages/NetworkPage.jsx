@@ -458,6 +458,7 @@ function NetworkPage() {
     const [loadError, setLoadError] = useState('');
     const [passport, setPassport] = useState(null);
     const [isMapVisible, setIsMapVisible] = useState(true);
+    const [mapLayer, setMapLayer] = useState('base');
     const [mapInstance, setMapInstance] = useState(null);
 
     const flowInstanceRef = useRef(null);
@@ -656,9 +657,16 @@ function NetworkPage() {
             <Toolbar
                 isMapVisible={isMapVisible}
                 onMapToggle={handleMapToggle}
+                mapLayer={mapLayer}
+                onMapLayerChange={setMapLayer}
             />
 
-            {isMapVisible && <PhysicalMap onMapReady={setMapInstance} />}
+            {isMapVisible && (
+                <PhysicalMap
+                    onMapReady={setMapInstance}
+                    mapLayer={mapLayer}
+                />
+            )}
 
             {loading && (
                 <div className="network-data-notice" role="status">

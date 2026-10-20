@@ -12,6 +12,7 @@
     "db:seed-demo-nodes": "node scripts/seed-demo-nodes.js",
     "build": "vite build",
     "build:military-districts": "node scripts/build-military-districts.mjs",
+    "build:russia-regions": "node scripts/build-russia-regions.mjs",
     "lint": "eslint .",
     "test": "node --test",
     "preview": "vite preview"
