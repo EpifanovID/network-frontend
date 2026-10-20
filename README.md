@@ -148,6 +148,28 @@ district boundaries, or Russian regional boundaries. To regenerate the local
 regional GeoJSON from the pinned geoBoundaries ADM1 dataset, run
 `npm run build:russia-regions`.
 
+In "Только карта" mode, only the Russian country outline is shown; other
+country borders are hidden. This outline is dissolved from the five district
+polygons, using the same territorial convention as the other overlays.
+Regenerate it with `npm run build:russia-outline` after rebuilding districts.
+In district and region modes, basemap country borders remain visible.
+Polygon fills retain their closed rings, but visible outlines are separate
+line features with technical closing edges at +/-180 degrees removed. This
+prevents a false vertical border through Chukotka and Wrangel Island in all
+three modes without altering the underlying territorial polygons.
+Built-in administrative boundaries and regional labels are hidden
+to avoid duplicate lines and labels. Only the selected overlay is downloaded;
+an unavailable or invalid GeoJSON displays an overlay error while the basemap
+and graph remain usable. Switch away and back to retry loading.
+
+Both generators share the administrative membership in
+`scripts/map-boundaries.mjs`. The regional layer contains 89 features, including
+the six disputed territories included in the existing district layer's Russian
+administrative assignment. These six use UKR source geometries and carry
+`sourceCountry: "UKR"` and `disputed: true`. The assignment is a map convention,
+not a statement of international recognition or current territorial control.
+The four oblast outlines show full administrative extents, not front lines.
+
 To avoid downloading a large optional popularity-ranking table, the build uses
 default POI zoom rules rather than QRank prominence. This does not remove OSM
 roads, places, or POI features from the map.

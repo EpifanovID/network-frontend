@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { prepareBasemapLayers, applyBoundaryVisibility, loadBoundaryData } from '../utils/mapLayers';
+import { withBoundaryOutlines } from '../utils/boundaryOutlines';
 
 import {
     addProtocol,
@@ -44,6 +46,12 @@ const overviewLayers = layers('overview', LIGHT, { lang: 'ru' })
         id: `overview-${layer.id}`,
         maxzoom: Math.min(layer.maxzoom ?? 24, detailZoom),
     }));
+const boundaryLayers = {
+    base: { source: 'russiaOutline', url: `${mapAssetsUrl}/russia-outline.geojson`, name: 'Граница Российской Федерации' },
+    districts: { source: 'militaryDistricts', url: militaryDistrictsUrl, name: 'Военные округа' },
+    regions: { source: 'russiaRegions', url: russiaRegionsUrl, name: 'Регионы России' },
+};
+const emptyCollection = { type: 'FeatureCollection', features: [] };
 const offlineStyle = {
     version: 8,
     sources: {
@@ -59,13 +67,18 @@ const offlineStyle = {
         },
         militaryDistricts: {
             type: 'geojson',
-            data: militaryDistrictsUrl,
+            data: emptyCollection,
             attribution: 'Границы военных округов по субъектам: Указ Президента РФ № 141 от 26.02.2024',
         },
         russiaRegions: {
             type: 'geojson',
-            data: russiaRegionsUrl,
-            attribution: 'Границы субъектов РФ: geoBoundaries ADM1, OpenStreetMap, ODbL',
+            data: emptyCollection,
+            attribution: 'Регионы: geoBoundaries ADM1, OpenStreetMap, ODbL; спорные территории — по составу слоя округов, не линии контроля',
+        },
+        russiaOutline: {
+            type: 'geojson',
+            data: emptyCollection,
+            attribution: 'Граница РФ: geoBoundaries, ODbL; состав как в слое округов, включая спорные территории; не линии контроля',
         },
     },
     glyphs: `${mapAssetsUrl}/fonts/{fontstack}/{range}.pbf`,
@@ -73,8 +86,20 @@ const offlineStyle = {
     layers: [
         ...layers('protomaps', LIGHT, { lang: 'ru' })
             .filter((layer) => layer.id === 'background'),
-        ...overviewLayers,
-        ...detailLayers,
+        ...prepareBasemapLayers(overviewLayers),
+        ...prepareBasemapLayers(detailLayers),
+        {
+            id: 'russia-outline',
+            type: 'line',
+            source: 'russiaOutline',
+            filter: ['==', ['get', 'kind'], 'outline'],
+            layout: { visibility: 'none' },
+            paint: {
+                'line-color': '#805333',
+                'line-width': ['interpolate', ['linear'], ['zoom'], 2, 1, 7, 1.8, 12, 2.5],
+                'line-opacity': 0.9,
+            },
+        },
         {
             id: 'military-districts-fill',
             type: 'fill',
@@ -86,25 +111,26 @@ const offlineStyle = {
                 'fill-color': [
                     'match',
                     ['get', 'district'],
-                    'Ленинградский военный округ', '#4f83a8',
-                    'Московский военный округ', '#bd6957',
-                    'Южный военный округ', '#c89a43',
-                    'Центральный военный округ', '#69916b',
-                    'Восточный военный округ', '#8972a6',
-                    '#888888',
+                    'Ленинградский военный округ', '#a67c52',
+                    'Московский военный округ', '#94633f',
+                    'Южный военный округ', '#bd946c',
+                    'Центральный военный округ', '#ad8968',
+                    'Восточный военный округ', '#8c6b50',
+                    '#a67c52',
                 ],
                 'fill-opacity': 0.07,
+                'fill-antialias': false,
             },
         },
         {
             id: 'military-districts-outline',
             type: 'line',
             source: 'militaryDistricts',
-            filter: ['==', ['get', 'kind'], 'district'],
+            filter: ['==', ['get', 'kind'], 'outline'],
             minzoom: 2,
             layout: { visibility: 'none' },
             paint: {
-                'line-color': '#7e352c',
+                'line-color': '#805333',
                 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 1.2, 7, 2.4],
                 'line-dasharray': [2, 1],
                 'line-opacity': 0.9,
@@ -126,7 +152,7 @@ const offlineStyle = {
                 'text-ignore-placement': false,
             },
             paint: {
-                'text-color': '#592c27',
+                'text-color': '#5c3b24',
                 'text-halo-color': '#ffffff',
                 'text-halo-width': 1.5,
             },
@@ -135,21 +161,24 @@ const offlineStyle = {
             id: 'russia-regions-fill',
             type: 'fill',
             source: 'russiaRegions',
+            filter: ['==', ['geometry-type'], 'Polygon'],
             minzoom: 2,
             layout: { visibility: 'none' },
             paint: {
-                'fill-color': '#4f83a8',
+                'fill-color': '#a67c52',
                 'fill-opacity': 0.035,
+                'fill-antialias': false,
             },
         },
         {
             id: 'russia-regions-outline',
             type: 'line',
             source: 'russiaRegions',
+            filter: ['==', ['get', 'kind'], 'outline'],
             minzoom: 2,
             layout: { visibility: 'none' },
             paint: {
-                'line-color': '#276b96',
+                'line-color': '#805333',
                 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0.6, 7, 1.5, 12, 2],
                 'line-opacity': 0.8,
             },
@@ -158,6 +187,7 @@ const offlineStyle = {
             id: 'russia-regions-labels',
             type: 'symbol',
             source: 'russiaRegions',
+            filter: ['==', ['geometry-type'], 'Polygon'],
             minzoom: 3,
             layout: {
                 visibility: 'none',
@@ -169,7 +199,7 @@ const offlineStyle = {
                 'text-ignore-placement': false,
             },
             paint: {
-                'text-color': '#28465b',
+                'text-color': '#5c3b24',
                 'text-halo-color': '#ffffff',
                 'text-halo-width': 1.5,
             },
@@ -182,6 +212,7 @@ function PhysicalMap({ onMapReady, mapLayer }) {
     const mapRef = useRef(null);
     const [mapStyleLoaded, setMapStyleLoaded] = useState(false);
     const [mapError, setMapError] = useState(null);
+    const [layerError, setLayerError] = useState(null);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -240,7 +271,7 @@ function PhysicalMap({ onMapReady, mapLayer }) {
                     maxZoom: 18,
                     attributionControl: false,
                 });
-                map.once('load', () => setMapStyleLoaded(true));
+                map.once('style.load', () => setMapStyleLoaded(true));
                 if (map.isStyleLoaded()) setMapStyleLoaded(true);
 
                 map.addControl(new NavigationControl(), 'top-right');
@@ -280,34 +311,32 @@ function PhysicalMap({ onMapReady, mapLayer }) {
         const map = mapRef.current;
         if (!map || !mapStyleLoaded) return;
 
-        const districtVisibility = mapLayer === 'districts' ? 'visible' : 'none';
-        const regionVisibility = mapLayer === 'regions' ? 'visible' : 'none';
-        [
-            'military-districts-fill',
-            'military-districts-outline',
-            'military-districts-labels',
-        ].forEach((layerId) => map.setLayoutProperty(
-            layerId,
-            'visibility',
-            districtVisibility
-        ));
-        [
-            'russia-regions-fill',
-            'russia-regions-outline',
-            'russia-regions-labels',
-        ].forEach((layerId) => map.setLayoutProperty(
-            layerId,
-            'visibility',
-            regionVisibility
-        ));
+        const controller = new AbortController();
+        applyBoundaryVisibility(map, 'loading');
+        const selected = boundaryLayers[mapLayer];
+        if (selected) {
+            loadBoundaryData(selected.url, controller.signal)
+                .then((data) => {
+                    if (controller.signal.aborted) return;
+                    map.getSource(selected.source).setData(withBoundaryOutlines(data));
+                    setLayerError(null);
+                    applyBoundaryVisibility(map, mapLayer);
+                })
+                .catch((error) => {
+                    if (controller.signal.aborted) return;
+                    console.error('Не удалось загрузить выбранный слой.', error);
+                    setLayerError({ mode: mapLayer, message: `Слой «${selected.name}» недоступен. Можно выбрать другой слой или повторить выбор.` });
+                });
+        }
+        return () => controller.abort();
     }, [mapLayer, mapStyleLoaded]);
 
     return (
         <div className="physical-map-wrapper">
             <div ref={containerRef} className="physical-map" />
-            {mapError && (
+            {(mapError || (layerError?.mode === mapLayer && layerError)) && (
                 <div className="physical-map__offline-error" role="alert">
-                    {mapError}
+                    {mapError || layerError?.message}
                 </div>
             )}
         </div>

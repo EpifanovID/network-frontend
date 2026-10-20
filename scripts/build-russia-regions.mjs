@@ -1,12 +1,17 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { boundaryDataUrls, districts, geoBoundariesRevision } from './map-boundaries.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputPath = path.join(root, 'public', 'maps', 'russia-regions.geojson');
-const geoBoundariesRevision = '9469f09592ced973a3448cf66b6100b741b64c0d';
-const dataUrl = `https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/${geoBoundariesRevision}/releaseData/gbOpen/RUS/ADM1/geoBoundaries-RUS-ADM1_simplified.geojson`;
 const russianNames = {
+    'Autonomous Republic of Crimea': 'Республика Крым',
+    'Sevastopol': 'Севастополь',
+    'Donetsk Oblast': 'Донецкая область',
+    'Luhansk Oblast': 'Луганская область',
+    'Kherson Oblast': 'Херсонская область',
+    'Zaporizhia Oblast': 'Запорожская область',
     'Adygea': 'Республика Адыгея',
     'Altai Krai': 'Алтайский край',
     'Altai Republic': 'Республика Алтай',
@@ -94,37 +99,49 @@ const russianNames = {
     'Zabaykalsky Krai': 'Забайкальский край',
 };
 
-const response = await fetch(dataUrl);
-if (!response.ok) {
-    throw new Error(`Could not download Russian regional boundaries (HTTP ${response.status}).`);
-}
-
-const source = await response.json();
-if (!Array.isArray(source.features) || source.features.length < 80) {
-    throw new Error('The downloaded regional-boundary GeoJSON is incomplete.');
-}
-
-const seenNames = new Set();
-const features = source.features.map((feature) => {
-    const shapeName = feature.properties?.shapeName;
-    if (!shapeName || !feature.geometry || seenNames.has(shapeName)) {
-        throw new Error(`Missing, invalid, or duplicate regional boundary: ${shapeName}`);
+// Use exactly the same administrative units as the district generator.
+const indexed = new Map();
+for (const [countryCode, url] of Object.entries(boundaryDataUrls)) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Boundary download failed: ${countryCode} HTTP ${response.status}`);
+    const source = await response.json();
+    if (!Array.isArray(source.features)) throw new Error('Invalid boundary collection');
+    for (const feature of source.features) {
+        const key = `${countryCode}:${feature.properties?.shapeName}`;
+        if (indexed.has(key)) throw new Error(`Duplicate boundary: ${key}`);
+        indexed.set(key, feature);
     }
-    seenNames.add(shapeName);
+}
+const seen = new Set();
+const features = districts.flatMap((district) => district.subjects.map(([countryCode, shapeName]) => {
+    const key = `${countryCode}:${shapeName}`;
+    const feature = indexed.get(key);
+    if (!feature?.geometry || !['Polygon', 'MultiPolygon'].includes(feature.geometry.type)
+        || seen.has(key) || !russianNames[shapeName]) {
+        throw new Error(`Missing, invalid, duplicate or untranslated boundary: ${key}`);
+    }
+    seen.add(key);
     return {
         type: 'Feature',
         properties: {
-            name: russianNames[shapeName] ?? shapeName,
+            name: russianNames[shapeName],
             sourceName: shapeName,
+            sourceCountry: countryCode,
+            district: district.name,
+            disputed: countryCode === 'UKR',
             shapeISO: feature.properties.shapeISO,
         },
         geometry: feature.geometry,
     };
-});
-
+}));
+if ([...indexed.keys()].some((key) => key.startsWith('RUS:') && !seen.has(key))) {
+    throw new Error('Some source regions are not assigned to a district');
+}
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify({
     type: 'FeatureCollection',
+    sourceRevision: geoBoundariesRevision,
+    boundaryConvention: 'Same administrative assignment as military-districts.geojson; disputed territories use UKR source geometry and do not represent lines of control.',
     features,
 })}\n`, 'utf8');
-console.log(`Wrote ${features.length} Russian regional boundaries to ${outputPath}`);
+console.log(`Wrote ${features.length} regional boundaries to ${outputPath}`);

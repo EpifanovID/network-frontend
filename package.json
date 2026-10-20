@@ -13,6 +13,7 @@
     "build": "vite build",
     "build:military-districts": "node scripts/build-military-districts.mjs",
     "build:russia-regions": "node scripts/build-russia-regions.mjs",
+    "build:russia-outline": "node scripts/build-russia-outline.mjs",
     "lint": "eslint .",
     "test": "node --test",
     "preview": "vite preview"

@@ -22,6 +22,17 @@
 - Regional boundaries use geoBoundaries ADM1 data derived from OpenStreetMap and
   distributed under the ODbL. Run `npm run build:russia-regions` to regenerate
   `russia-regions.geojson` from the pinned geoBoundaries revision.
+  Both overlays use the same membership defined in `scripts/map-boundaries.mjs`.
+  Six disputed territories use UKR source geometry and are explicitly marked
+  with `sourceCountry: "UKR"` and `disputed: true` in the regional file.
+  Their inclusion follows the existing district layer's Russian administrative
+  assignment, not international recognition or actual territorial control.
+  The four oblast boundaries show full administrative extents, not front lines.
 
 The map displays visible OpenStreetMap and Protomaps attribution. Preserve
 these notices when redistributing the generated PMTiles archive or map assets.
+
+`russia-outline.geojson` is the union of the five district polygons, with
+internal boundaries removed. It inherits their sources, license and territorial
+convention, including disputed territories; it does not show lines of control.
+Regenerate it locally with `npm run build:russia-outline`.
