@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 function Passport({
     type,
@@ -13,6 +13,21 @@ function Passport({
     const [latitude, setLatitude] = useState(() => String(data?.lat ?? ''));
     const [coordinateError, setCoordinateError] = useState('');
     const [savingCoordinates, setSavingCoordinates] = useState(false);
+    const localElementRef = useRef(null);
+
+    useLayoutEffect(() => {
+        if (elementRef || !position) return;
+        const element = localElementRef.current;
+        if (!element) return;
+        const keepVisible = () => {
+            const { width, height } = element.getBoundingClientRect();
+            element.style.left = `${Math.max(12, Math.min(position.x, window.innerWidth - width - 12))}px`;
+            element.style.top = `${Math.max(12, Math.min(position.y, window.innerHeight - height - 12))}px`;
+        };
+        keepVisible();
+        window.addEventListener('resize', keepVisible);
+        return () => window.removeEventListener('resize', keepVisible);
+    }, [elementRef, position, data, coordinateError]);
 
     if (!data || !position) {
         return null;
@@ -51,7 +66,7 @@ function Passport({
 
     return (
         <div
-            ref={elementRef}
+            ref={elementRef || localElementRef}
             className="passport"
             style={{
                 left: `${position.x}px`,
@@ -62,7 +77,14 @@ function Passport({
                 <>
                     <div className="passport__title">
                         Паспорт объекта
+                        <span className="passport__subtitle">{data.label}</span>
                     </div>
+                    {data.endpointLabel && (
+                        <div className="passport__row">
+                            <span className="passport__label">Соединяет:</span>
+                            <span className="passport__value">{data.endpointLabel}</span>
+                        </div>
+                    )}
 
                     <div className="passport__row">
                         <span className="passport__label">
@@ -79,7 +101,7 @@ function Passport({
                             ID:
                         </span>
 
-                        <span className="passport__value">
+                        <span className="passport__value passport__value--id">
                             {data.id}
                         </span>
                     </div>
@@ -114,6 +136,7 @@ function Passport({
                         className="passport__coordinates"
                         onSubmit={handleCoordinatesSubmit}
                     >
+                        <span className="passport__section-title">Координаты на карте</span>
                         <label className="passport__coordinate-field">
                             <span>Долгота</span>
                             <input
@@ -165,7 +188,7 @@ function Passport({
                         to={`/objects/${data.id}`}
                         className="passport__link"
                     >
-                        Показать древовидную структуру →
+                        Состав узла связи →
                     </Link>
                 </>
             )}
@@ -174,6 +197,9 @@ function Passport({
                 <>
                     <div className="passport__title">
                         Паспорт соединения
+                        <span className="passport__subtitle">
+                            {data.sourceLabel || data.source} ↔ {data.targetLabel || data.target}
+                        </span>
                     </div>
 
                     <div className="passport__row">
@@ -181,8 +207,8 @@ function Passport({
                             ID:
                         </span>
 
-                        <span className="passport__value">
-                            {data.id}
+                        <span className="passport__value passport__value--id">
+                            {data.lineId || data.id}
                         </span>
                     </div>
 

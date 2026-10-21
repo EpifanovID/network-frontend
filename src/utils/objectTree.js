@@ -29,7 +29,8 @@ export function buildObjectSubtree(nodes, edges, rootId) {
                 source: sourceId,
                 target: target.id,
                 type: 'smoothstep',
-                label: edge.label,
+                label: typeof edge.label === 'string' && edge.label.trim().toLocaleLowerCase('ru') === 'состоит из'
+                    ? 'имеет' : edge.label,
             });
         });
     }

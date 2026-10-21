@@ -1,24 +1,10 @@
-import antenna1 from '../assets/icons/antenna_1.svg';
-import antenna2 from '../assets/icons/antenna_2.svg';
-import antenna3 from '../assets/icons/antenna_3.svg';
-
-const icons = {
-    1: antenna1,
-    2: antenna2,
-    3: antenna3,
-};
-
 function NetworkNodeContent({ data }) {
-    const icon = icons[data.treeNumber] || antenna1;
-
+    const isConnectionNode = /узел связи/i.test(data.templateName || data.type || '');
     return (
         <>
-            <img
-                src={icon}
-                alt={data.label}
-                className="network-node__icon"
-            />
-            <div className="network-node__label">{data.label}</div>
+            <span className="network-node__category">{isConnectionNode ? 'УЗЕЛ СВЯЗИ' : 'ОБЪЕКТ СЕТИ'}</span>
+            <strong className="network-node__label">{data.label}</strong>
+            <span className="network-node__type" title={data.templateName || data.type}>{data.templateName || data.type}</span>
         </>
     );
 }

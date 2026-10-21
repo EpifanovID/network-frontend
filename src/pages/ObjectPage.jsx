@@ -45,20 +45,24 @@ function ObjectPage() {
                 <Link to="/" className="object-page__back">
                     ← К карте
                 </Link>
+                <div className="object-page__heading">
+                <span className="object-page__eyebrow">СЕТЬ СВЯЗИ / СОСТАВ</span>
                 <h1>
                     {object
-                        ? `Структура объекта ${object.data.label}`
-                        : `Структура объекта ${objectId}`}
+                        ? `Состав узла связи · ${object.data.label}`
+                        : `Состав узла связи`}
                 </h1>
+                {object && <p>{object.data.templateName || object.data.type}</p>}
+                </div>
             </div>
             <div className="object-page__content">
                 {loading ? (
                     <div className="object-tree__status" role="status">
-                        Загрузка структуры объекта…
+                        Загружаю состав узла связи…
                     </div>
                 ) : error ? (
                     <div className="object-tree__status" role="alert">
-                        Не удалось загрузить структуру: {error}
+                        Не удалось загрузить состав: {error}
                     </div>
                 ) : object ? (
                     <ObjectTree

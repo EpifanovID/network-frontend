@@ -1,10 +1,12 @@
 import { Background, Controls, ReactFlow } from '@xyflow/react';
-import dagre from '@dagrejs/dagre';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Toolbar from '../components/Toolbar';
+import RoutedEdge from '../components/RoutedEdge';
+import { buildFullNetwork, getNetworkSelection } from '../utils/fullNetwork';
 import PhysicalMap from '../components/PhysicalMap';
 import NetworkNode from '../components/NetworkNode';
+import { diagramEdgeOptions } from '../components/diagramEdges';
 import NetworkNodeContent from '../components/NetworkNodeContent';
 import Passport from '../components/Passport';
 import { fetchJson } from '../utils/api';
@@ -13,124 +15,8 @@ import { buildMapEdges } from '../utils/mapGraph';
 import '@xyflow/react/dist/style.css';
 import '../App.css';
 
-const NODE_WIDTH = 94;
-const NODE_HEIGHT = 48;
-const FREE_GRAPH_PROJECTION_SCALE = 16;
-
-function getConnectionHandles(source, target) {
-    const dx = target.position.x - source.position.x;
-    const dy = target.position.y - source.position.y;
-    const isHorizontal = Math.abs(dx) / NODE_WIDTH >= Math.abs(dy) / NODE_HEIGHT;
-
-    if (isHorizontal) {
-        if (dx >= 0) {
-            return { sourceHandle: 'right-source', targetHandle: 'left-target' };
-        }
-        return { sourceHandle: 'left-source', targetHandle: 'right-target' };
-    }
-    if (dy >= 0) {
-        return { sourceHandle: 'bottom-source', targetHandle: 'top-target' };
-    }
-    return { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
-}
-
-function projectLocation({ lng, lat }) {
-    const maxMercatorLatitude = 85.0511287798066;
-    const latitude = Math.max(
-        -maxMercatorLatitude,
-        Math.min(maxMercatorLatitude, lat)
-    );
-    const sine = Math.sin((latitude * Math.PI) / 180);
-
-    return {
-        x: ((lng + 180) / 360) * 256 * FREE_GRAPH_PROJECTION_SCALE,
-        y: (
-            0.5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI)
-        ) * 256 * FREE_GRAPH_PROJECTION_SCALE,
-    };
-}
-
-function getMedian(values) {
-    const ordered = [...values].sort((left, right) => left - right);
-    const middle = Math.floor(ordered.length / 2);
-    return ordered.length % 2
-        ? ordered[middle]
-        : (ordered[middle - 1] + ordered[middle]) / 2;
-}
-
-function getMedianCenter(points) {
-    return {
-        x: getMedian(points.map((point) => point.x)),
-        y: getMedian(points.map((point) => point.y)),
-    };
-}
-
 function hasCoordinates(node) {
     return Number.isFinite(node.lng) && Number.isFinite(node.lat);
-}
-
-function layoutGraphPositions(objects, edges) {
-    const graph = new dagre.graphlib.Graph();
-    graph.setDefaultEdgeLabel(() => ({}));
-    graph.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 70 });
-
-    objects.forEach((node) => {
-        graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-    });
-    edges.forEach((edge) => graph.setEdge(edge.source, edge.target));
-    dagre.layout(graph);
-
-    return new Map(objects.map((node) => {
-        const position = graph.node(node.id);
-        return [node.id, {
-            x: position.x,
-            y: position.y,
-        }];
-    }));
-}
-
-function buildGraph(objects, relations) {
-    const allLocated = objects.every(hasCoordinates);
-    const laidOutPositions = allLocated
-        ? null
-        : layoutGraphPositions(objects, relations);
-    const nodes = objects.map((node) => {
-        const position = allLocated
-            ? projectLocation(node)
-            : laidOutPositions.get(node.id);
-        return {
-            id: node.id,
-            type: 'networkNode',
-            position,
-            data: { ...node.data, id: node.id, lng: node.lng, lat: node.lat },
-        };
-    });
-
-    const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
-    const edges = relations
-        .filter((edge) => byId[edge.source] && byId[edge.target])
-        .map((edge) => ({
-            ...edge,
-            ...getConnectionHandles(byId[edge.source], byId[edge.target]),
-        }));
-
-    const connected = {};
-    edges.forEach((e) => {
-        if (!connected[e.source]) connected[e.source] = new Set();
-        if (!connected[e.target]) connected[e.target] = new Set();
-        connected[e.source].add(e.sourceHandle);
-        connected[e.target].add(e.targetHandle);
-    });
-
-    const graphNodes = Object.values(byId).map((n) => ({
-        ...n,
-        data: {
-            ...n.data,
-            connectedHandles: connected[n.id] || new Set(),
-        },
-    }));
-
-    return { nodes: graphNodes, edges };
 }
 
 function createEdgePassport(edge, position, anchorT = 0.5) {
@@ -138,6 +24,7 @@ function createEdgePassport(edge, position, anchorT = 0.5) {
         type: 'edge',
         data: {
             id: edge.id,
+            lineId: edge.lineId,
             source: edge.source,
             target: edge.target,
             label: edge.label,
@@ -183,9 +70,15 @@ function MapGraphOverlay({
     const objectsRef = useRef(objects);
     const updateMapRef = useRef(null);
     const hasInitialFitRef = useRef(false);
+    const selectedEdge = passport?.type === 'edge'
+        ? edges.find((edge) => edge.id === passport.data.id) : null;
+    const highlightedNodes = new Set(selectedEdge
+        ? [selectedEdge.source, selectedEdge.target]
+        : passport?.nodeId ? [passport.nodeId] : []);
 
     useEffect(() => {
         passportRef.current = passport;
+        updateMapRef.current?.();
     }, [passport]);
 
     useEffect(() => {
@@ -212,6 +105,7 @@ function MapGraphOverlay({
         }));
         const edgeElements = edges.map((edge) => ({
             ...edge,
+            labelElement: svg.querySelector(`[data-edge-label="${edge.id}"]`),
             elements: [
                 svg.querySelector(
                     `.network-map-overlay__edge[data-id="${edge.id}"]`
@@ -232,8 +126,8 @@ function MapGraphOverlay({
                 currentViewBox = nextViewBox;
             }
             const nodeScale = Math.min(
-                2.5,
-                Math.max(0.5, 2 ** ((map.getZoom() - 3) / 2))
+                1.35,
+                Math.max(0.7, 2 ** ((map.getZoom() - 5) / 6))
             );
             if (nodeScale !== currentNodeScale) {
                 nodeElements.forEach(({ element }) => {
@@ -263,7 +157,7 @@ function MapGraphOverlay({
             });
 
             const edgeSegments = new Map();
-            edgeElements.forEach(({ id, source, target, elements }) => {
+            edgeElements.forEach(({ id, source, target, elements, labelElement }) => {
                 const sourcePoint = points.get(source);
                 const targetPoint = points.get(target);
                 if (!sourcePoint || !targetPoint) return;
@@ -298,6 +192,10 @@ function MapGraphOverlay({
                     element.setAttribute('x2', String(targetX));
                     element.setAttribute('y2', String(targetY));
                 });
+                if (labelElement) {
+                    labelElement.setAttribute('x', String((sourceX + targetX) / 2));
+                    labelElement.setAttribute('y', String((sourceY + targetY) / 2));
+                }
             });
 
             const activePassport = passportRef.current;
@@ -379,11 +277,12 @@ function MapGraphOverlay({
 
     return (
         <div ref={overlayRef} className="network-map-overlay">
-            <svg className="network-map-overlay__edges" aria-hidden="true">
+            <svg className="network-map-overlay__edges" aria-label="Линии связи на карте">
                 {edges.map((edge) => (
                     <line
                         key={edge.id}
-                        className="network-map-overlay__edge"
+                        className={`network-map-overlay__edge${selectedEdge?.id === edge.id ? ' is-active' : ''}`}
+                        style={{ opacity: selectedEdge && selectedEdge.id !== edge.id ? 0.18 : 1 }}
                         data-id={edge.id}
                         onClick={(event) => {
                             event.stopPropagation();
@@ -396,11 +295,23 @@ function MapGraphOverlay({
                         }}
                     />
                 ))}
+                {edges.filter((edge) => edge.label).map((edge) => (
+                    <text key={`label:${edge.id}`} data-edge-label={edge.id}
+                        className="network-map-overlay__edge-label"
+                        style={{ opacity: selectedEdge && selectedEdge.id !== edge.id ? 0.18 : 1 }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onEdgeClick(createEdgePassport(edge, { x: event.clientX + 12, y: event.clientY + 12 }));
+                        }}>
+                        {edge.label}
+                    </text>
+                ))}
             </svg>
             {objects.map((node) => (
                 <div
                     key={node.id}
-                    className="network-map-overlay__node"
+                    className={`network-map-overlay__node${highlightedNodes.has(node.id) ? ' is-active' : ''}`}
+                    style={{ opacity: selectedEdge && !highlightedNodes.has(node.id) ? 0.4 : 1 }}
                     data-id={node.id}
                     onClick={(event) => {
                         event.stopPropagation();
@@ -418,7 +329,7 @@ function MapGraphOverlay({
                         });
                     }}
                 >
-                    <div className="network-node">
+                    <div className={`network-node${/узел связи/i.test(node.data.templateName || node.data.type || '') ? ' network-node--communication' : ''}`}>
                         <NetworkNodeContent data={node.data} />
                     </div>
                 </div>
@@ -449,11 +360,11 @@ function MapGraphOverlay({
 }
 
 const nodeTypes = { networkNode: NetworkNode };
+const edgeTypes = { routed: RoutedEdge };
 
 function NetworkPage() {
     const [objects, setObjects] = useState([]);
     const [relations, setRelations] = useState([]);
-    const [graphPositions, setGraphPositions] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [passport, setPassport] = useState(null);
@@ -464,23 +375,19 @@ function NetworkPage() {
     const flowInstanceRef = useRef(null);
     const passportElementRef = useRef(null);
     const pendingFocusRef = useRef(null);
-    const flowSpreadFactorRef = useRef(1);
-    const graph = useMemo(
-        () => buildGraph(objects, relations),
-        [objects, relations]
-    );
-    const basePositions = useMemo(
-        () => new Map(graph.nodes.map((node) => [node.id, node.position])),
-        [graph]
-    );
-    const nodes = useMemo(
-        () => graph.nodes.map((node) => ({
-            ...node,
-            position: graphPositions?.get(node.id) ?? node.position,
-        })),
-        [graph, graphPositions]
-    );
-    const edges = graph.edges;
+    const graph = useMemo(() => buildFullNetwork(objects, relations), [objects, relations]);
+    const selection = getNetworkSelection(graph, isMapVisible ? null : passport);
+    const hasSelection = selection.edgeIds.size > 0;
+    const edges = graph.edges.map((edge) => ({ ...edge,
+        style: { opacity: hasSelection && !selection.edgeIds.has(edge.id) ? 0.12 : 1,
+            stroke: selection.edgeIds.has(edge.id) ? '#805333' : edge.lineId ? '#96704b' : '#c8b8a4',
+            strokeWidth: selection.edgeIds.has(edge.id) ? 3 : edge.lineId ? 1.8 : 1.2 },
+        zIndex: selection.edgeIds.has(edge.id) ? 10 : 0,
+    }));
+    const displayedNodes = graph.nodes.map((node) => ({ ...node,
+        style: { opacity: hasSelection && !selection.nodeIds.has(node.id) ? 0.3 : 1 },
+        className: selection.nodeIds.has(node.id) ? 'network-node--highlighted' : '',
+    }));
     const handleNodeClick = useCallback((nextPassport) => {
         setPassport(nextPassport);
     }, []);
@@ -502,7 +409,6 @@ function NetworkPage() {
                 }
                 setObjects(result.nodes);
                 setRelations(result.edges);
-                setGraphPositions(null);
                 setLoadError('');
             } catch (error) {
                 if (controller.signal.aborted) return;
@@ -517,62 +423,34 @@ function NetworkPage() {
         return () => controller.abort();
     }, []);
 
-    const handleFlowMove = useCallback((_, viewport) => {
-        const flow = document.querySelector('.network-flow--interactive');
-        if (flow) {
-            const iconScale = String(
-                Math.min(2.5, Math.max(1, viewport.zoom)) / viewport.zoom
-            );
-            if (flow.style.getPropertyValue('--flow-icon-scale') !== iconScale) {
-                flow.style.setProperty('--flow-icon-scale', iconScale);
-            }
-        }
-
-        const spreadFactor = Math.min(
-            6,
-            1 + Math.max(0, viewport.zoom - 1) * 0.8
-        );
-        const spreadChanged = (
-            Math.abs(spreadFactor - flowSpreadFactorRef.current) >= 0.08
-        );
-        const entries = [...basePositions.entries()].map(
-            ([id, position]) => ({ id, position })
-        );
-        if (!entries.length) return;
-        const center = getMedianCenter(
-            entries.map((item) => item.position)
-        );
-
-        if (spreadChanged && flow) {
-            const bounds = flow.getBoundingClientRect();
-            const nextViewport = {
-                ...viewport,
-                x: bounds.width / 2 - center.x * viewport.zoom,
-                y: bounds.height / 2 - center.y * viewport.zoom,
-            };
-            flowSpreadFactorRef.current = spreadFactor;
-            flowInstanceRef.current?.setViewport(nextViewport, { duration: 0 });
-        }
-        if (!spreadChanged) return;
-
-        setGraphPositions(new Map(entries.map(({ id, position }) => [
-            id,
-            {
-                x: center.x + (position.x - center.x) * spreadFactor,
-                y: center.y + (position.y - center.y) * spreadFactor,
-            },
-        ])));
-    }, [basePositions]);
-
     const handleFitGraph = useCallback(() => {
-        flowSpreadFactorRef.current = 1;
-        setGraphPositions(null);
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                flowInstanceRef.current?.fitView({ padding: 0.2 });
-            });
-        });
+        flowInstanceRef.current?.fitView({ padding: 0.15, duration: 250 });
     }, []);
+
+    const updateGraphPassport = useCallback(() => {
+        const flow = flowInstanceRef.current;
+        if (isMapVisible || !flow) return;
+        setPassport((current) => {
+            if (!current?.flowAnchor) return current;
+            const point = flow.flowToScreenPosition(current.flowAnchor);
+            const x = point.x + current.anchorOffset.x;
+            const y = point.y + current.anchorOffset.y;
+            if (current.position.x === x && current.position.y === y) return current;
+            return { ...current, position: { x, y } };
+        });
+    }, [isMapVisible]);
+
+    useEffect(() => {
+        if (isMapVisible) return;
+        window.addEventListener('resize', updateGraphPassport);
+        const observer = new ResizeObserver(updateGraphPassport);
+        const container = document.querySelector('.network-flow--interactive');
+        if (container) observer.observe(container);
+        return () => {
+            window.removeEventListener('resize', updateGraphPassport);
+            observer.disconnect();
+        };
+    }, [isMapVisible, updateGraphPassport]);
 
     const handleCoordinatesChange = useCallback(async ({ id, lng, lat }) => {
         await fetchJson(`/api/nodes/${encodeURIComponent(id)}/location`, {
@@ -586,7 +464,6 @@ function NetworkPage() {
                 ? { ...object, lng, lat }
                 : object
         )));
-        setGraphPositions(null);
         setPassport((current) => (
             current?.nodeId === id
                 ? {
@@ -623,8 +500,8 @@ function NetworkPage() {
     const handleBackgroundClick = (event) => {
         if (!(event.target instanceof Element)) return;
         if (event.target.closest(
-            '.passport, .network-map-overlay__node, .network-map-overlay__edge, '
-            + '.network-map-overlay__edge-hit, .react-flow__node, .react-flow__edge'
+            '.passport, .network-map-overlay__node, .network-map-overlay__edge, .network-map-overlay__edge-label, '
+            + '.network-map-overlay__edge-hit, .react-flow__node, .react-flow__edge, .react-flow__controls'
         )) {
             return;
         }
@@ -632,13 +509,7 @@ function NetworkPage() {
     };
 
     const handleMapToggle = () => {
-        if (isMapVisible) {
-            flowSpreadFactorRef.current = 1;
-            setPassport(null);
-        } else {
-            flowInstanceRef.current?.setViewport({ x: 0, y: 0, zoom: 1 });
-        }
-        setGraphPositions(null);
+        setPassport(null);
         setIsMapVisible((visible) => !visible);
     };
 
@@ -684,7 +555,7 @@ function NetworkPage() {
                     В выбранной базе пока нет СФЭ для отображения.
                 </div>
             )}
-            {!loading && !loadError && unlocatedCount > 0 && (
+            {!loading && !loadError && unlocatedCount > 0 && isMapVisible && (
                 <div className="network-data-notice" role="status">
                     {unlocatedCount} узл. без координат.
                     {isMapVisible
@@ -693,6 +564,11 @@ function NetworkPage() {
                 </div>
             )}
 
+            {!isMapVisible && !loading && !loadError && (
+                <div className="network-data-notice" role="status">
+                    Линии связи → узлы связи → оборудование
+                </div>
+            )}
             {isMapVisible ? (
                 <MapGraphOverlay
                     map={mapInstance}
@@ -707,18 +583,19 @@ function NetworkPage() {
             ) : (
                 <ReactFlow
                     className="network-flow--interactive"
-                    nodes={nodes}
+                    nodes={displayedNodes}
                     edges={edges}
                     nodeTypes={nodeTypes}
+                    edgeTypes={edgeTypes}
+                    defaultEdgeOptions={diagramEdgeOptions}
                     fitView
                     fitViewOptions={{ padding: 0.2 }}
                     minZoom={0.1}
                     maxZoom={8}
                     onInit={(instance) => {
                         flowInstanceRef.current = instance;
-                        handleFlowMove(null, instance.getViewport());
                     }}
-                    onMove={handleFlowMove}
+                    onMove={updateGraphPassport}
                     nodeOrigin={[0.5, 0.5]}
                     nodesDraggable={false}
                     nodesConnectable={false}
@@ -738,17 +615,22 @@ function NetworkPage() {
                             data: { id: node.id, ...node.data },
                             nodeId: node.id,
                             position: { x: rect.right + 15, y: rect.top },
+                            flowAnchor: flowInstanceRef.current.screenToFlowPosition({ x: rect.right, y: rect.top }),
+                            anchorOffset: { x: 15, y: 0 },
                         });
                     }}
                     onEdgeClick={(event, edge) => {
-                        setPassport(createEdgePassport(edge, {
+                        setPassport({ ...createEdgePassport(edge, {
                             x: event.clientX + 12,
                             y: event.clientY + 12,
-                        }));
+                        }),
+                            flowAnchor: flowInstanceRef.current.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+                            anchorOffset: { x: 12, y: 12 },
+                        });
                     }}
                     onPaneClick={() => setPassport(null)}
                 >
-                    <Background color="#d6dee8" gap={24} size={1} />
+                    <Background color="#ded8ce" gap={24} size={1} />
                     <Controls showInteractive={false} showFitView={false}>
                         <button
                             type="button"

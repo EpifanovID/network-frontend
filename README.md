@@ -4,6 +4,16 @@ This template provides a minimal setup to get React working in Vite with HMR and
 
 ## PostgreSQL-backed graph
 
+Without the map, the graph displays the full composition. Line objects are
+placed in a separate upper row, communication nodes below them, and each
+node's equipment in its own column. Every line-to-node relation uses its own
+horizontal lane and a separate card port. Crossings can still occur, but
+connections do not share the same horizontal track. Each line card names its
+endpoints. Selecting a line card or either of its links highlights the complete
+line route and all endpoint nodes; clicking the background clears selection.
+The layout preserves all source objects and valid relations, including objects
+without coordinates. Zooming does not rearrange nodes or routing tracks.
+
 The network graph reads SFE nodes from `imc.thematic_layers_sfes` and direct
 SFE-to-SFE links from `imc.thematic_layers_sfe_linkings` (`id_ls_sfe`). Link
 targets stored as external catalogue records are not drawn as graph edges.

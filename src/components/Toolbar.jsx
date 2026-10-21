@@ -21,7 +21,7 @@ function Toolbar({
                     🗺
                 </span>
             </button>
-            <label className="toolbar__layer-control">
+            {isMapVisible ? <label className="toolbar__layer-control">
                 <span className="toolbar__layer-label">Слои карты</span>
                 <select
                     className="toolbar__layer-select"
@@ -34,7 +34,7 @@ function Toolbar({
                     <option value="districts">Военные округа</option>
                     <option value="regions">Регионы России</option>
                 </select>
-            </label>
+            </label> : null}
         </div>
     );
 }
