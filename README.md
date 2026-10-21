@@ -4,6 +4,9 @@ Web application for viewing communication nodes, lines, and their composition
 as a graph or on an offline map. Built with React and Vite, with an Express API
 and PostgreSQL storage.
 
+Подробное объяснение архитектуры, движения данных, графов и основных файлов:
+[Руководство по устройству проекта](./docs/PROJECT_GUIDE.md).
+
 ## PostgreSQL-backed graph
 
 The line composition page is `/lines/:lineId`. Clicking a line on the map,
