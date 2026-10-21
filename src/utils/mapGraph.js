@@ -42,6 +42,7 @@ export function buildMapEdges(objects, relations) {
         targetIds.forEach((targetId, index) => {
             mapEdges.push({
                 id: `map-line:${lineId}:${index}`,
+                lineId,
                 source: sourceId,
                 target: targetId,
                 label: line.data?.label ?? line.label,

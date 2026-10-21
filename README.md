@@ -4,6 +4,20 @@ This template provides a minimal setup to get React working in Vite with HMR and
 
 ## PostgreSQL-backed graph
 
+The line composition page is `/lines/:lineId`. Clicking a line on the map,
+its card in the full graph, or one of its graph connections opens its passport.
+The passport's "Состав линии связи" link opens the composition page. ЛС1 uses a
+hardcoded demonstration for UUID `53ff7800-a047-48dd-ba59-50daff0e98d3`.
+Other lines have a placeholder composition page accessible from their passport.
+The example data is in `src/data/lineExample.js`: 20 stable object identifiers
+`LS1-001`–`LS1-020` and 27 relation identifiers `LS1-R01`–`LS1-R27`.
+The scheme separates equipment membership, physical connections and channel
+route relationships using filters. Every card shows its ID, and the object
+registry and selected-element panel support reviewing the example.
+The router-port route and corrected relation from port 4 to ODF are explicitly
+marked as assumptions from the supplied sketch. The example does not write to
+PostgreSQL.
+
 Without the map, the graph displays the full composition. Line objects are
 placed in a separate upper row, communication nodes below them, and each
 node's equipment in its own column. Every line-to-node relation uses its own

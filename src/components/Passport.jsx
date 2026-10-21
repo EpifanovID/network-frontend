@@ -185,10 +185,12 @@ function Passport({
                     </form>
 
                     <Link
-                        to={`/objects/${data.id}`}
+                        to={data.isLine || /линия связи/i.test(data.templateName || data.type || '')
+                            ? `/lines/${data.id}` : `/objects/${data.id}`}
                         className="passport__link"
                     >
-                        Состав узла связи →
+                        {data.isLine || /линия связи/i.test(data.templateName || data.type || '')
+                            ? 'Состав линии связи →' : 'Состав узла связи →'}
                     </Link>
                 </>
             )}
@@ -243,6 +245,7 @@ function Passport({
                             <span className="passport__value">{data.relationLabel}</span>
                         </div>
                     )}
+                    {data.lineId && <Link to={`/lines/${data.lineId}`} className="passport__link">Состав линии связи →</Link>}
                 </>
             )}
         </div>

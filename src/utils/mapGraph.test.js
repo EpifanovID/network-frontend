@@ -39,6 +39,7 @@ test('draws a line between located endpoints of a line SFE', () => {
     assert.equal(edges.length, 1);
     assert.deepEqual(edges[0], {
         id: 'map-line:line-1:0',
+        lineId: 'line-1',
         source: 'node-1',
         target: 'node-2',
         label: 'ЛС1',
