@@ -739,12 +739,12 @@
 .toolbar__filter :focus-visible { outline: 2px solid #bb9369; outline-offset: -2px; }
 
 @media (max-width: 720px) {
-    .app:has(.toolbar__filters) { --toolbar-height: 160px; }
+    .app:has(.toolbar__layers) { --toolbar-height: 160px; }
     .toolbar { gap: 4px 8px; padding-inline: 8px; }
     .toolbar__layers { grid-column: 1 / -1; grid-row: 2; }
     .toolbar__label { display: none; }
     .toolbar__layers .toolbar__button { padding-inline: 8px; }
-    .toolbar__filters { grid-row: 3; }
+    .toolbar__layers + .toolbar__filters { grid-row: 3; }
     .toolbar__filter { display: grid; gap: 3px; flex: 1; }
     .toolbar__filter details { width: 100%; }
     .toolbar__filter:last-child .toolbar__filter-popup { left: auto; right: 0; }

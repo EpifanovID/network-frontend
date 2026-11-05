@@ -388,7 +388,15 @@ function NetworkPage() {
     const flowInstanceRef = useRef(null);
     const passportElementRef = useRef(null);
     const pendingFocusRef = useRef(null);
-    const graph = useMemo(() => buildExpandableNetwork(objects, relations), [objects, relations]);
+    const selectedBoundary = region
+        ? boundaries?.regions.find(({ properties }) => properties.shapeISO === region)
+        : boundaries?.districts.find(({ properties }) => properties.district === district);
+    const locatedObjects = useMemo(() => objects.filter((node) => hasCoordinates(node)
+        && (!selectedBoundary || containsMapPoint(selectedBoundary.geometry, node.lng, node.lat))),
+    [objects, selectedBoundary]);
+    const visibleIds = useMemo(() => selectedBoundary ? new Set(locatedObjects.map(({ id }) => id)) : null,
+        [locatedObjects, selectedBoundary]);
+    const graph = useMemo(() => buildExpandableNetwork(objects, relations, visibleIds), [objects, relations, visibleIds]);
     const toggleComposition = useCallback((id) => {
         setExpandedIds((previous) => {
             const next = new Set(previous);
@@ -578,21 +586,15 @@ function NetworkPage() {
         setIsMapVisible(visible);
     };
 
-    const selectedBoundary = region
-        ? boundaries?.regions.find(({ properties }) => properties.shapeISO === region)
-        : boundaries?.districts.find(({ properties }) => properties.district === district);
-    const locatedObjects = useMemo(() => objects.filter((node) => hasCoordinates(node)
-        && (!selectedBoundary || containsMapPoint(selectedBoundary.geometry, node.lng, node.lat))),
-    [objects, selectedBoundary]);
     const allMapEdges = useMemo(
         () => buildMapEdges(objects, relations),
         [objects, relations]
     );
     const mapEdges = useMemo(() => {
-        if (!selectedBoundary) return allMapEdges;
-        const visibleIds = new Set(locatedObjects.map(({ id }) => id));
+        if (!visibleIds) return allMapEdges;
         return allMapEdges.filter(({ source, target }) => visibleIds.has(source) && visibleIds.has(target));
-    }, [allMapEdges, locatedObjects, selectedBoundary]);
+    }, [allMapEdges, visibleIds]);
+    const noTerritoryObjects = selectedBoundary && !(isMapVisible ? locatedObjects.length : graph.nodes.length);
     return (
         <div className="app" onClickCapture={handleBackgroundClick}>
             <Toolbar
@@ -634,12 +636,12 @@ function NetworkPage() {
                     {' '}Проверьте подключение API и PostgreSQL.
                 </div>
             )}
-            {isMapVisible && !loading && !loadError && boundaryError && (
+            {!loading && !loadError && boundaryError && (
                 <div className="network-data-notice network-data-notice--error" role="alert">
-                    Не удалось загрузить границы для фильтрации карты.
+                    Не удалось загрузить границы для фильтрации по территории.
                 </div>
             )}
-            {isMapVisible && !loading && !loadError && selectedBoundary && !locatedObjects.length && (
+            {!loading && !loadError && objects.length > 0 && noTerritoryObjects && (
                 <div className="network-data-notice" role="status">
                     В выбранной территории нет объектов с координатами.
                 </div>
@@ -649,7 +651,7 @@ function NetworkPage() {
                     В выбранной базе пока нет СФЭ для отображения.
                 </div>
             )}
-            {!isMapVisible && !loading && !loadError && (
+            {!isMapVisible && !loading && !loadError && !boundaryError && !noTerritoryObjects && objects.length > 0 && (
                 <div className="network-data-notice" role="status">
                     Нажмите «+» у узла или комплекта, чтобы раскрыть его состав.
                 </div>

@@ -98,24 +98,22 @@ function Toolbar({
                     </div>
                 </div>
             )}
-            {isMapVisible && (
-                <div className="toolbar__filters" role="group" aria-label="Фильтры территории">
-                    <TerritoryFilter label="Военный округ" allLabel="Все округа" value={district}
-                        onChange={onDistrictChange} disabled={!boundaries}
-                        options={[
-                            { value: '', label: 'Все округа' },
-                            ...(boundaries?.districts ?? []).map(({ properties }) => ({
-                                value: properties.district, label: properties.district,
-                            })),
-                        ]} />
-                    <TerritoryFilter label="Регион" allLabel="Все регионы" value={region}
-                        onChange={onRegionChange} disabled={!boundaries}
-                        options={[
-                            { value: '', label: 'Все регионы' },
-                            ...regions.map(({ properties }) => ({ value: properties.shapeISO, label: properties.name })),
-                        ]} />
-                </div>
-            )}
+            <div className="toolbar__filters" role="group" aria-label="Фильтры территории">
+                <TerritoryFilter label="Военный округ" allLabel="Все округа" value={district}
+                    onChange={onDistrictChange} disabled={!boundaries}
+                    options={[
+                        { value: '', label: 'Все округа' },
+                        ...(boundaries?.districts ?? []).map(({ properties }) => ({
+                            value: properties.district, label: properties.district,
+                        })),
+                    ]} />
+                <TerritoryFilter label="Регион" allLabel="Все регионы" value={region}
+                    onChange={onRegionChange} disabled={!boundaries}
+                    options={[
+                        { value: '', label: 'Все регионы' },
+                        ...regions.map(({ properties }) => ({ value: properties.shapeISO, label: properties.name })),
+                    ]} />
+            </div>
             <button
                 type="button"
                 className="toolbar__button toolbar__refresh"

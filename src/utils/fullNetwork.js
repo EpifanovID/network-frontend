@@ -1,8 +1,10 @@
 const isKind = (node, expression) => expression.test(node.data.templateName || node.data.type || '');
 const byLabel = (a, b) => a.data.label.localeCompare(b.data.label, 'ru', { numeric: true });
 
-export function buildExpandableNetwork(objects, relations) {
-    const roots = objects.filter((node) => isKind(node, /узел связи/i)).sort(byLabel);
+export function buildExpandableNetwork(objects, relations, visibleIds = null) {
+    const allRoots = objects.filter((node) => isKind(node, /узел связи/i)).sort(byLabel);
+    const roots = visibleIds ? allRoots.filter(({ id }) => visibleIds.has(id)) : allRoots;
+    const allRootIds = new Set(allRoots.map(({ id }) => id));
     const lines = objects.filter((node) => isKind(node, /линия связи/i)).sort(byLabel);
     const rootIds = new Set(roots.map((node) => node.id));
     const endpoints = new Map(lines.map((line) => [line.id, new Set()]));
@@ -15,7 +17,7 @@ export function buildExpandableNetwork(objects, relations) {
         else if (endpoints.has(target) && rootIds.has(source)) endpoints.get(target).add(source);
         else if (rootIds.has(source) && rootIds.has(target) && source !== target) directEdges.push(edge);
         else if (edge.label?.trim().toLocaleLowerCase('ru') === 'состоит из'
-            && byId.has(target) && !rootIds.has(target) && !endpoints.has(target)) {
+            && byId.has(target) && !allRootIds.has(target) && !endpoints.has(target)) {
             children.get(source)?.set(target, byId.get(target));
         }
     }
@@ -34,6 +36,7 @@ export function buildExpandableNetwork(objects, relations) {
     const connections = [...directEdges];
     for (const line of lines) {
         const ids = [...endpoints.get(line.id)].sort((a, b) => byLabel(byId.get(a), byId.get(b)));
+        if (visibleIds && ids.length < 2) continue;
         const connection = { lineId: line.id, label: line.data.label };
         if (ids.length === 2) {
             connections.push({ ...connection, id: `overview:${line.id}`, source: ids[0], target: ids[1] });

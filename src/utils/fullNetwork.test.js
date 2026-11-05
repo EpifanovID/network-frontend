@@ -23,6 +23,15 @@ test('overview keeps equipment inside its node and draws each line between its r
     assert.deepEqual([...selection.edgeIds], [graph.edges[0].id]);
 });
 
+test('territory filter keeps visible nodes and their composition while hiding lines to excluded nodes', () => {
+    const filtered = buildExpandableNetwork(objects, relations, new Set(['УС1']));
+    assert.deepEqual(filtered.nodes.map(({ id }) => id), ['УС1']);
+    assert.equal(filtered.nodes[0].data.composition[0].children[0].id, 'Б1');
+    assert.deepEqual(filtered.edges, []);
+    assert.equal(buildExpandableNetwork(objects, relations, new Set(['УС1', 'УС2'])).edges.length, 2);
+    assert.deepEqual(buildExpandableNetwork(objects, relations, new Set()), { nodes: [], edges: [] });
+});
+
 test('full layout preserves all objects and relations with equipment below its node', () => {
     const before = structuredClone({ objects, relations });
     const graph = buildFullNetwork(objects, relations);
