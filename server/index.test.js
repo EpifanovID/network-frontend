@@ -1,9 +1,50 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { after, before, test } from 'node:test';
 
 import { createApp } from './index.js';
 
 const sourceId = '10325016-e49f-45c1-bc49-ddce3fa476ae';
+
+test('local server serves frontend routes, map byte ranges, and API on the same origin', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'network-local-test-'));
+    let localServer;
+    try {
+        await mkdir(path.join(directory, 'maps'));
+        await writeFile(path.join(directory, 'index.html'), '<html>local application</html>');
+        await writeFile(path.join(directory, 'maps', 'example.pmtiles'), '0123456789');
+        localServer = createApp(pool, { staticDirectory: directory }).listen(0, '127.0.0.1');
+        await new Promise((resolve) => localServer.once('listening', resolve));
+        const origin = `http://127.0.0.1:${localServer.address().port}`;
+        for (const route of ['/', `/objects/${sourceId}`, `/lines/${linkId}`]) {
+            const response = await fetch(`${origin}${route}`);
+            assert.equal(response.status, 200);
+            assert.match(response.headers.get('content-type'), /text\/html/);
+            assert.equal(await response.text(), '<html>local application</html>');
+        }
+        const head = await fetch(`${origin}/maps/example.pmtiles`, { method: 'HEAD' });
+        assert.equal(head.status, 200);
+        assert.equal(head.headers.get('content-length'), '10');
+        const range = await fetch(`${origin}/maps/example.pmtiles`, { headers: { Range: 'bytes=2-5' } });
+        assert.equal(range.status, 206);
+        assert.equal(range.headers.get('content-range'), 'bytes 2-5/10');
+        assert.equal(await range.text(), '2345');
+        const graph = await fetch(`${origin}/api/graph`);
+        assert.equal((await graph.json()).nodes[0].id, sourceId);
+        const missingApi = await fetch(`${origin}/api/missing`);
+        assert.equal(missingApi.status, 404);
+        assert.equal((await missingApi.json()).error, 'API endpoint not found.');
+        const missingMap = await fetch(`${origin}/maps/missing.pmtiles`);
+        assert.equal(missingMap.status, 404);
+        assert.doesNotMatch(await missingMap.text(), /local application/);
+        assert.equal((await fetch(`${origin}/.env`)).status, 404);
+    } finally {
+        if (localServer) await new Promise((resolve) => localServer.close(resolve));
+        await rm(directory, { recursive: true, force: true });
+    }
+});
 const targetId = '20325016-e49f-45c1-bc49-ddce3fa476ae';
 const linkId = '30325016-e49f-45c1-bc49-ddce3fa476ae';
 const queries = [];

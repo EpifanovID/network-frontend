@@ -7,6 +7,14 @@ and PostgreSQL storage.
 Подробное объяснение архитектуры, движения данных, графов и основных файлов:
 [Руководство по устройству проекта](./docs/PROJECT_GUIDE.md).
 
+## Local launch without internet
+
+Run `npm start` or double-click `start-local.cmd`, then open
+`http://127.0.0.1:4173/`. This builds locally and serves the frontend, map
+assets, and API together. Local PostgreSQL, installed dependencies and map
+archives are required. No packages are downloaded on startup.
+See [инструкцию по локальному запуску](./docs/LOCAL_RUN.md).
+
 ## PostgreSQL-backed graph
 
 The line composition page is `/lines/:lineId`. Clicking a line on the map,

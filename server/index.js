@@ -1,20 +1,21 @@
 import 'dotenv/config';
 
 import express from 'express';
+import { access } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import pg from 'pg';
 
 const { Pool } = pg;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function createApp(pool) {
+export function createApp(pool, { staticDirectory } = {}) {
     const app = express();
     app.disable('x-powered-by');
     app.use(express.json({ limit: '16kb' }));
 
-    app.get('/', (_request, response) => {
+    if (!staticDirectory) app.get('/', (_request, response) => {
         response.json({
             service: 'network-frontend graph API',
             endpoints: {
@@ -171,6 +172,17 @@ export function createApp(pool) {
         }
     });
 
+    if (staticDirectory) {
+        const directory = path.resolve(staticDirectory);
+        app.use('/api', (_request, response) => {
+            response.status(404).json({ error: 'API endpoint not found.' });
+        });
+        app.use(express.static(directory));
+        app.get(['/objects/:objectId', '/lines/:lineId'], (_request, response) => {
+            response.sendFile(path.join(directory, 'index.html'));
+        });
+    }
+
     app.use((error, _request, response, _next) => {
         void _next;
         console.error(`API request failed: ${error.message}`);
@@ -185,10 +197,34 @@ async function startServer() {
         throw new Error('DATABASE_URL is required. Set it in .env before starting the API.');
     }
 
-    const port = Number(process.env.API_PORT || 3001);
-    const host = process.env.API_HOST || '127.0.0.1';
+    const serveFrontend = process.argv.includes('--serve-frontend');
+    const staticDirectory = serveFrontend
+        ? fileURLToPath(new URL('../dist/', import.meta.url)) : undefined;
+    if (staticDirectory) {
+        for (const file of [
+            'index.html',
+            'maps/network-overview.pmtiles',
+            'maps/network-areas.pmtiles',
+            'maps/russia-outline.geojson',
+            'maps/military-districts.geojson',
+            'maps/russia-regions.geojson',
+            'maps/sprites/light.json',
+            'maps/sprites/light.png',
+            'maps/sprites/light@2x.json',
+            'maps/sprites/light@2x.png',
+            ...['Regular', 'Medium', 'Italic'].map((font) => `maps/fonts/Noto Sans ${font}/0-255.pbf`),
+        ]) {
+            try {
+                await access(path.join(staticDirectory, file));
+            } catch {
+                throw new Error(`Missing local file: ${file}. Check public/maps and run npm run build.`);
+            }
+        }
+    }
+    const port = Number(serveFrontend ? process.env.LOCAL_PORT || 4173 : process.env.API_PORT || 3001);
+    const host = serveFrontend ? '127.0.0.1' : process.env.API_HOST || '127.0.0.1';
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        throw new Error('API_PORT must be a valid TCP port.');
+        throw new Error('The server port must be a valid TCP port.');
     }
 
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -201,8 +237,8 @@ async function startServer() {
         return;
     }
 
-    const server = createApp(pool).listen(port, host, () => {
-        console.log(`Graph API listening on http://${host}:${port}`);
+    const server = createApp(pool, { staticDirectory }).listen(port, host, () => {
+        console.log(`${serveFrontend ? 'Local application' : 'Graph API'} listening on http://${host}:${port}`);
     });
 
     const closeServer = () => {

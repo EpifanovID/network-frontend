@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prestart": "npm run build",
+    "start": "node server/index.js --serve-frontend",
     "dev": "vite",
     "dev:api": "node --watch server/index.js",
     "start:api": "node server/index.js",
