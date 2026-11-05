@@ -21,6 +21,7 @@ export function createApp(pool, { staticDirectory } = {}) {
             endpoints: {
                 health: '/api/health',
                 graph: '/api/graph',
+                nodeProperties: '/api/nodes/:id/properties',
                 updateNodeLocation: 'PUT /api/nodes/:id/location',
             },
             frontend: 'Start the Vite app separately with npm run dev.',
@@ -120,6 +121,42 @@ export function createApp(pool, { staticDirectory } = {}) {
                 edges,
                 unlocatedCount: nodes.filter((node) => node.lng === null || node.lat === null).length,
             });
+        } catch (error) {
+            next(error);
+        }
+    });
+
+    app.get('/api/nodes/:id/properties', async (request, response, next) => {
+        const { id } = request.params;
+        if (!uuidPattern.test(id)) {
+            response.status(400).json({ error: 'Node id must be a UUID.' });
+            return;
+        }
+
+        try {
+            const { rows } = await pool.query(
+                `SELECT definition.id_sfet_property::text AS id,
+                        definition.name_rus AS name,
+                        CASE WHEN property.id_sfe_property IS NULL
+                            THEN COALESCE(default_record.value, definition.dv)
+                            ELSE COALESCE(saved_record.value, property.val)
+                        END AS value
+                 FROM imc.thematic_layers_sfes AS sfe
+                 LEFT JOIN imc.sfet_properties AS definition ON definition.id_sfet = sfe.id_sfet
+                 LEFT JOIN imc.thematic_layers_sfe_properties AS property
+                    ON property.id_sfe = sfe.id_sfe
+                    AND property.id_sfet_property = definition.id_sfet_property
+                 LEFT JOIN imc.dc_records AS saved_record ON saved_record.id_record = property.val_by_id_pvd_record
+                 LEFT JOIN imc.dc_records AS default_record ON default_record.id_record = definition.dv_by_if_pv_record
+                 WHERE sfe.id_sfe = $1::uuid
+                 ORDER BY definition.name_rus, definition.id_sfet_property`,
+                [id]
+            );
+            if (rows.length === 0) {
+                response.status(404).json({ error: 'The requested SFE node was not found.' });
+                return;
+            }
+            response.json({ properties: rows.filter((row) => row.id !== null) });
         } catch (error) {
             next(error);
         }

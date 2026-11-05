@@ -1,6 +1,80 @@
 const isKind = (node, expression) => expression.test(node.data.templateName || node.data.type || '');
 const byLabel = (a, b) => a.data.label.localeCompare(b.data.label, 'ru', { numeric: true });
 
+export function buildExpandableNetwork(objects, relations) {
+    const roots = objects.filter((node) => isKind(node, /узел связи/i)).sort(byLabel);
+    const lines = objects.filter((node) => isKind(node, /линия связи/i)).sort(byLabel);
+    const rootIds = new Set(roots.map((node) => node.id));
+    const endpoints = new Map(lines.map((line) => [line.id, new Set()]));
+    const children = new Map(objects.map((node) => [node.id, new Map()]));
+    const byId = new Map(objects.map((node) => [node.id, node]));
+    const directEdges = [];
+    for (const edge of relations) {
+        const { source, target } = edge;
+        if (endpoints.has(source) && rootIds.has(target)) endpoints.get(source).add(target);
+        else if (endpoints.has(target) && rootIds.has(source)) endpoints.get(target).add(source);
+        else if (rootIds.has(source) && rootIds.has(target) && source !== target) directEdges.push(edge);
+        else if (edge.label?.trim().toLocaleLowerCase('ru') === 'состоит из'
+            && byId.has(target) && !rootIds.has(target) && !endpoints.has(target)) {
+            children.get(source)?.set(target, byId.get(target));
+        }
+    }
+
+    function buildComposition(id, ancestors) {
+        return [...children.get(id).values()].sort(byLabel)
+            .filter((child) => !ancestors.has(child.id))
+            .map((child) => ({
+                id: child.id,
+                data: child.data,
+                children: buildComposition(child.id, new Set([...ancestors, child.id])),
+            }));
+    }
+
+    const junctions = [];
+    const connections = [...directEdges];
+    for (const line of lines) {
+        const ids = [...endpoints.get(line.id)].sort((a, b) => byLabel(byId.get(a), byId.get(b)));
+        const connection = { lineId: line.id, label: line.data.label };
+        if (ids.length === 2) {
+            connections.push({ ...connection, id: `overview:${line.id}`, source: ids[0], target: ids[1] });
+        } else {
+            junctions.push(line);
+            ids.forEach((target) => connections.push({
+                ...connection, id: `overview:${line.id}:${target}`, source: line.id, target,
+            }));
+        }
+    }
+    const ports = new Map([...roots, ...junctions].map((node) => [node.id, []]));
+    function addPort(id, edge, type) {
+        const handle = `overview-${edge.id}-${type}`;
+        ports.get(id).push({ id: handle, type, side: rootIds.has(id) ? 'top' : 'bottom' });
+        return handle;
+    }
+    const edges = connections.map((edge, index) => ({
+        ...edge,
+        type: 'routed',
+        sourceLabel: byId.get(edge.source).data.label,
+        targetLabel: byId.get(edge.target).data.label,
+        sourceHandle: addPort(edge.source, edge, 'source'),
+        targetHandle: addPort(edge.target, edge, 'target'),
+        data: { laneY: 116 + index * 30, routeLabel: edge.label },
+    }));
+    const nodes = [...roots, ...junctions].map((node, index) => {
+        const isLine = endpoints.has(node.id);
+        return {
+            id: node.id,
+            type: 'networkNode',
+            position: { x: (isLine ? index - roots.length : index) * 336, y: isLine ? 0 : 136 + edges.length * 30 },
+            data: {
+                ...node.data, id: node.id, lng: node.lng, lat: node.lat, isLine,
+                routePorts: ports.get(node.id),
+                composition: isLine ? [] : buildComposition(node.id, new Set([node.id])),
+            },
+        };
+    });
+    return { nodes, edges };
+}
+
 export function buildFullNetwork(objects, relations) {
     const byId = new Map(objects.map((node) => [node.id, node]));
     const roots = objects.filter((node) => isKind(node, /узел связи/i)).sort(byLabel);

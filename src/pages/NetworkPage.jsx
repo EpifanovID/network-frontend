@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Toolbar from '../components/Toolbar';
 import RoutedEdge from '../components/RoutedEdge';
-import { buildFullNetwork, getNetworkSelection } from '../utils/fullNetwork';
+import { buildExpandableNetwork, getNetworkSelection } from '../utils/fullNetwork';
 import PhysicalMap from '../components/PhysicalMap';
 import NetworkNode from '../components/NetworkNode';
 import { diagramEdgeOptions } from '../components/diagramEdges';
@@ -11,6 +11,8 @@ import NetworkNodeContent from '../components/NetworkNodeContent';
 import Passport from '../components/Passport';
 import { fetchJson } from '../utils/api';
 import { buildMapEdges } from '../utils/mapGraph';
+import { containsMapPoint } from '../utils/mapFilters';
+import { loadBoundaryData } from '../utils/mapLayers';
 
 import '@xyflow/react/dist/style.css';
 import '../App.css';
@@ -79,7 +81,12 @@ function MapGraphOverlay({
     useEffect(() => {
         passportRef.current = passport;
         updateMapRef.current?.();
-    }, [passport]);
+        const element = passportElementRef.current;
+        if (!element) return;
+        const observer = new ResizeObserver(() => updateMapRef.current?.());
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [passport, passportElementRef]);
 
     useEffect(() => {
         objectsRef.current = objects;
@@ -227,8 +234,8 @@ function MapGraphOverlay({
                 Math.max(12, anchorY),
                 bounds.height - passportHeight - 12
             );
-            passportElement.style.left = `${Math.max(12, left)}px`;
-            passportElement.style.top = `${Math.max(12, top)}px`;
+            passportElement.style.left = `${Math.max(12, Math.min(left, bounds.width - passportWidth - 12))}px`;
+            passportElement.style.top = `${bounds.top + Math.max(12, top)}px`;
         };
         updateMapRef.current = update;
 
@@ -366,16 +373,44 @@ function NetworkPage() {
     const [objects, setObjects] = useState([]);
     const [relations, setRelations] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshCount, setRefreshCount] = useState(0);
     const [loadError, setLoadError] = useState('');
     const [passport, setPassport] = useState(null);
     const [isMapVisible, setIsMapVisible] = useState(true);
+    const [expandedIds, setExpandedIds] = useState(() => new Set());
     const [mapLayer, setMapLayer] = useState('base');
+    const [district, setDistrict] = useState('');
+    const [region, setRegion] = useState('');
+    const [boundaries, setBoundaries] = useState(null);
+    const [boundaryError, setBoundaryError] = useState(false);
     const [mapInstance, setMapInstance] = useState(null);
 
     const flowInstanceRef = useRef(null);
     const passportElementRef = useRef(null);
     const pendingFocusRef = useRef(null);
-    const graph = useMemo(() => buildFullNetwork(objects, relations), [objects, relations]);
+    const graph = useMemo(() => buildExpandableNetwork(objects, relations), [objects, relations]);
+    const toggleComposition = useCallback((id) => {
+        setExpandedIds((previous) => {
+            const next = new Set(previous);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+        setPassport((current) => current?.type === 'node' ? null : current);
+    }, []);
+    const openGraphObject = useCallback((id, data, element) => {
+        const flow = flowInstanceRef.current;
+        if (!flow) return;
+        const { right, top } = element.getBoundingClientRect();
+        setPassport({
+            type: 'node',
+            data: { ...data, id },
+            nodeId: id,
+            position: { x: right + 15, y: top },
+            flowAnchor: flow.screenToFlowPosition({ x: right, y: top }),
+            anchorOffset: { x: 15, y: 0 },
+        });
+    }, []);
     const selection = getNetworkSelection(graph, isMapVisible ? null : passport);
     const hasSelection = selection.edgeIds.size > 0;
     const edges = graph.edges.map((edge) => ({ ...edge,
@@ -385,6 +420,7 @@ function NetworkPage() {
         zIndex: selection.edgeIds.has(edge.id) ? 10 : 0,
     }));
     const displayedNodes = graph.nodes.map((node) => ({ ...node,
+        data: { ...node.data, expandedIds, onToggle: toggleComposition, onOpen: openGraphObject },
         style: { opacity: hasSelection && !selection.nodeIds.has(node.id) ? 0.3 : 1 },
         className: selection.nodeIds.has(node.id) ? 'network-node--highlighted' : '',
     }));
@@ -403,12 +439,15 @@ function NetworkPage() {
             try {
                 const result = await fetchJson('/api/graph', {
                     signal: controller.signal,
+                    cache: 'no-store',
                 });
+                if (controller.signal.aborted) return;
                 if (!Array.isArray(result.nodes) || !Array.isArray(result.edges)) {
                     throw new TypeError('API вернул данные графа в неверном формате.');
                 }
                 setObjects(result.nodes);
                 setRelations(result.edges);
+                setPassport(null);
                 setLoadError('');
             } catch (error) {
                 if (controller.signal.aborted) return;
@@ -420,6 +459,31 @@ function NetworkPage() {
         }
 
         loadGraph();
+        return () => controller.abort();
+    }, [refreshCount]);
+
+    const handleRefresh = () => {
+        setLoading(true);
+        setLoadError('');
+        setRefreshCount((count) => count + 1);
+    };
+
+    useEffect(() => {
+        const controller = new AbortController();
+        const mapsUrl = `${import.meta.env.BASE_URL}maps/`;
+        Promise.all([
+            loadBoundaryData(`${mapsUrl}military-districts.geojson`, controller.signal),
+            loadBoundaryData(`${mapsUrl}russia-regions.geojson`, controller.signal),
+        ]).then(([districts, regions]) => {
+            if (!controller.signal.aborted) {
+                setBoundaries({
+                    districts: districts.features.filter(({ geometry }) => geometry.type !== 'Point'),
+                    regions: regions.features,
+                });
+            }
+        }).catch(() => {
+            if (!controller.signal.aborted) setBoundaryError(true);
+        });
         return () => controller.abort();
     }, []);
 
@@ -508,28 +572,48 @@ function NetworkPage() {
         setPassport(null);
     };
 
-    const handleMapToggle = () => {
+    const handleMapVisibilityChange = (visible) => {
+        if (visible === isMapVisible) return;
         setPassport(null);
-        setIsMapVisible((visible) => !visible);
+        setIsMapVisible(visible);
     };
 
-    const locatedObjects = useMemo(
-        () => objects.filter(hasCoordinates),
-        [objects]
-    );
-    const mapEdges = useMemo(
+    const selectedBoundary = region
+        ? boundaries?.regions.find(({ properties }) => properties.shapeISO === region)
+        : boundaries?.districts.find(({ properties }) => properties.district === district);
+    const locatedObjects = useMemo(() => objects.filter((node) => hasCoordinates(node)
+        && (!selectedBoundary || containsMapPoint(selectedBoundary.geometry, node.lng, node.lat))),
+    [objects, selectedBoundary]);
+    const allMapEdges = useMemo(
         () => buildMapEdges(objects, relations),
         [objects, relations]
     );
-    const unlocatedCount = objects.length - locatedObjects.length;
-
+    const mapEdges = useMemo(() => {
+        if (!selectedBoundary) return allMapEdges;
+        const visibleIds = new Set(locatedObjects.map(({ id }) => id));
+        return allMapEdges.filter(({ source, target }) => visibleIds.has(source) && visibleIds.has(target));
+    }, [allMapEdges, locatedObjects, selectedBoundary]);
     return (
         <div className="app" onClickCapture={handleBackgroundClick}>
             <Toolbar
                 isMapVisible={isMapVisible}
-                onMapToggle={handleMapToggle}
+                onMapVisibilityChange={handleMapVisibilityChange}
                 mapLayer={mapLayer}
                 onMapLayerChange={setMapLayer}
+                onRefresh={handleRefresh}
+                isRefreshing={loading}
+                boundaries={boundaries}
+                district={district}
+                region={region}
+                onDistrictChange={(value) => {
+                    setDistrict(value);
+                    setRegion('');
+                    setPassport(null);
+                }}
+                onRegionChange={(value) => {
+                    setRegion(value);
+                    setPassport(null);
+                }}
             />
 
             {isMapVisible && (
@@ -541,7 +625,7 @@ function NetworkPage() {
 
             {loading && (
                 <div className="network-data-notice" role="status">
-                    Загружаю узлы и связи из базы данных…
+                    {refreshCount ? 'Обновляю узлы и связи…' : 'Загружаю узлы и связи из базы данных…'}
                 </div>
             )}
             {loadError && (
@@ -550,23 +634,24 @@ function NetworkPage() {
                     {' '}Проверьте подключение API и PostgreSQL.
                 </div>
             )}
+            {isMapVisible && !loading && !loadError && boundaryError && (
+                <div className="network-data-notice network-data-notice--error" role="alert">
+                    Не удалось загрузить границы для фильтрации карты.
+                </div>
+            )}
+            {isMapVisible && !loading && !loadError && selectedBoundary && !locatedObjects.length && (
+                <div className="network-data-notice" role="status">
+                    В выбранной территории нет объектов с координатами.
+                </div>
+            )}
             {!loading && !loadError && objects.length === 0 && (
                 <div className="network-data-notice" role="status">
                     В выбранной базе пока нет СФЭ для отображения.
                 </div>
             )}
-            {!loading && !loadError && unlocatedCount > 0 && isMapVisible && (
-                <div className="network-data-notice" role="status">
-                    {unlocatedCount} узл. без координат.
-                    {isMapVisible
-                        ? ' Переключитесь в режим графа без карты, задайте координаты в паспорте узла и сохраните.'
-                        : ' Задайте координаты в паспорте узла, чтобы разместить его на карте.'}
-                </div>
-            )}
-
             {!isMapVisible && !loading && !loadError && (
                 <div className="network-data-notice" role="status">
-                    Линии связи → узлы связи → оборудование
+                    Нажмите «+» у узла или комплекта, чтобы раскрыть его состав.
                 </div>
             )}
             {isMapVisible ? (
@@ -596,7 +681,7 @@ function NetworkPage() {
                         flowInstanceRef.current = instance;
                     }}
                     onMove={updateGraphPassport}
-                    nodeOrigin={[0.5, 0.5]}
+                    nodeOrigin={[0.5, 0]}
                     nodesDraggable={false}
                     nodesConnectable={false}
                     panOnDrag
@@ -604,21 +689,7 @@ function NetworkPage() {
                     zoomOnPinch
                     zoomOnDoubleClick
                     preventScrolling
-                    onNodeClick={(_, node) => {
-                        const el = document.querySelector(
-                            `.react-flow__node[data-id="${node.id}"]`
-                        );
-                        if (!el) return;
-                        const rect = el.getBoundingClientRect();
-                        setPassport({
-                            type: 'node',
-                            data: { id: node.id, ...node.data },
-                            nodeId: node.id,
-                            position: { x: rect.right + 15, y: rect.top },
-                            flowAnchor: flowInstanceRef.current.screenToFlowPosition({ x: rect.right, y: rect.top }),
-                            anchorOffset: { x: 15, y: 0 },
-                        });
-                    }}
+                    onNodeClick={(event, node) => openGraphObject(node.id, node.data, event.currentTarget)}
                     onEdgeClick={(event, edge) => {
                         setPassport({ ...createEdgePassport(edge, {
                             x: event.clientX + 12,

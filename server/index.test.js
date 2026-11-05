@@ -54,6 +54,12 @@ let baseUrl;
 const pool = {
     async query(sql, values = []) {
         queries.push({ sql, values });
+        if (sql.includes('LEFT JOIN imc.sfet_properties AS definition')) {
+            if (values[0] === sourceId) {
+                return { rows: [{ id: linkId, name: 'Мощность', value: '0' }] };
+            }
+            return { rows: values[0] === targetId ? [{ id: null, name: null, value: null }] : [] };
+        }
         if (sql.includes('INSERT INTO imc.network_node_locations')) {
             return {
                 rows: [{
@@ -163,4 +169,20 @@ test('validates and persists map coordinates with parameterized SQL', async () =
     assert.deepEqual(saved, { id: sourceId, lng: 37.62, lat: 55.75 });
     assert.deepEqual(query.values, [sourceId, 37.62, 55.75]);
     assert.match(query.sql, /WHERE id_sfe = \$1::uuid/);
+});
+
+test('loads properties for one SFE and distinguishes empty, missing, and invalid objects', async () => {
+    const url = (id) => `${baseUrl}/api/nodes/${id}/properties`;
+    const response = await fetch(url(sourceId));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { properties: [{ id: linkId, name: 'Мощность', value: '0' }] });
+    assert.deepEqual(queries.at(-1).values, [sourceId]);
+
+    const empty = await fetch(url(targetId));
+    assert.equal(empty.status, 200);
+    assert.deepEqual(await empty.json(), { properties: [] });
+    assert.equal((await fetch(url(linkId))).status, 404);
+    const queryCount = queries.length;
+    assert.equal((await fetch(url('invalid'))).status, 400);
+    assert.equal(queries.length, queryCount);
 });

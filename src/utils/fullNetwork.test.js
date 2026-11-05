@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildFullNetwork, getNetworkSelection } from './fullNetwork.js';
+import { buildExpandableNetwork, buildFullNetwork, getNetworkSelection } from './fullNetwork.js';
 
 const node = (id, templateName) => ({ id, data: { label: id, templateName } });
 const objects = [node('УС1', 'Узел связи'), node('УС2', 'Узел связи'),
@@ -9,6 +9,19 @@ const relations = [{ id: 'l1-a', source: 'ЛС1', target: 'УС1' }, { id: 'l1-b
     { id: 'l2-a', source: 'ЛС2', target: 'УС1' }, { id: 'l2-b', source: 'УС2', target: 'ЛС2' },
     { id: 'has-p', source: 'УС1', target: 'П1', label: 'состоит из' },
     { id: 'has-b', source: 'П1', target: 'Б1', label: 'состоит из' }];
+
+test('overview keeps equipment inside its node and draws each line between its real endpoints', () => {
+    const graph = buildExpandableNetwork(objects, relations);
+    assert.deepEqual(graph.nodes.map((entry) => entry.id), ['УС1', 'УС2']);
+    const [equipment] = graph.nodes[0].data.composition;
+    assert.equal(equipment.id, 'П1');
+    assert.deepEqual(equipment.children.map((entry) => entry.id), ['Б1']);
+    assert.deepEqual(graph.nodes[1].data.composition, []);
+    assert.deepEqual(graph.edges.map(({ label, lineId, source, target }) => [label, lineId, source, target]),
+        [['ЛС1', 'ЛС1', 'УС1', 'УС2'], ['ЛС2', 'ЛС2', 'УС1', 'УС2']]);
+    const selection = getNetworkSelection(graph, { type: 'edge', data: { id: graph.edges[0].id } });
+    assert.deepEqual([...selection.edgeIds], [graph.edges[0].id]);
+});
 
 test('full layout preserves all objects and relations with equipment below its node', () => {
     const before = structuredClone({ objects, relations });
