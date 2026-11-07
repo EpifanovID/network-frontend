@@ -165,7 +165,7 @@ export function buildFullNetwork(objects, relations) {
 export function getNetworkSelection(graph, passport) {
     const edge = passport?.type === 'edge' ? graph.edges.find((edge) => edge.id === passport.data.id) : null;
     const node = passport?.type === 'node' ? graph.nodes.find((node) => node.id === passport.nodeId) : null;
-    const lineId = node?.data.isLine ? node.id : edge?.lineId;
+    const lineId = node?.data.isLine ? node.id : passport?.data.lineId ?? edge?.lineId;
     if (lineId) {
         const related = graph.edges.filter((edge) => edge.lineId === lineId);
         return { nodeIds: new Set([lineId, ...related.flatMap((edge) => [edge.source, edge.target])]),

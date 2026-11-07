@@ -17,15 +17,16 @@ function CompositionToggle({ id, label, expanded, onToggle }) {
     );
 }
 
-function CompositionList({ items, expandedIds, onToggle, onOpen }) {
+function CompositionList({ items, expandedIds, highlightNodes, onToggle, onOpen }) {
     return (
         <ul className="network-composition__list">
             {items.map(({ id, data, children }) => {
                 const expanded = expandedIds.has(id);
                 return (
                     <li key={id}>
-                        <div className="network-composition__item">
+                        <div className={`network-composition__item${highlightNodes?.has(id) ? ' is-highlighted' : ''}`}>
                             <button type="button" className="network-composition__name nodrag nopan"
+                                data-passport-id={id}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     onOpen(id, data, event.currentTarget);
@@ -38,7 +39,7 @@ function CompositionList({ items, expandedIds, onToggle, onOpen }) {
                             )}
                         </div>
                         {expanded && <CompositionList items={children} expandedIds={expandedIds}
-                            onToggle={onToggle} onOpen={onOpen} />}
+                            highlightNodes={highlightNodes} onToggle={onToggle} onOpen={onOpen} />}
                     </li>
                 );
             })}
@@ -65,7 +66,7 @@ export default function NetworkNode({ data }) {
             </div>
             {expanded && data.composition.length > 0 && (
                 <CompositionList items={data.composition} expandedIds={data.expandedIds}
-                    onToggle={data.onToggle} onOpen={data.onOpen} />
+                    highlightNodes={data.highlightNodes} onToggle={data.onToggle} onOpen={data.onOpen} />
             )}
         </div>
     );

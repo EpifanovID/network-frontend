@@ -49,8 +49,8 @@ function ObjectPage() {
                 <span className="object-page__eyebrow">СЕТЬ СВЯЗИ / СОСТАВ</span>
                 <h1>
                     {object
-                        ? `Состав узла связи · ${object.data.label}`
-                        : `Состав узла связи`}
+                        ? `Схема УС · ${object.data.label}`
+                        : `Схема УС`}
                 </h1>
                 {object && <p>{object.data.templateName || object.data.type}</p>}
                 </div>

@@ -1,62 +1,37 @@
-import { useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
-const mapLayers = [
-    { id: 'base', label: 'Только карта' },
-    { id: 'districts', label: 'Военные округа' },
-    { id: 'regions', label: 'Регионы России' },
-];
-
-function TerritoryFilter({ label, allLabel, options, value, onChange, disabled }) {
-    const [query, setQuery] = useState('');
-    const popupRef = useRef(null);
-    const searchRef = useRef(null);
-    const search = query.trim().toLocaleLowerCase('ru');
-    const findMatches = (text) => options.filter((option) => option.label.toLocaleLowerCase('ru').includes(text));
-    const exactMatches = findMatches(search);
-    const matches = exactMatches.length === 0 && search.length >= 3
-        ? findMatches(search.slice(0, -1))
-        : exactMatches;
-
+function MainMenu({ isMapVisible, mapLayer, onApply, onOpenHighlight, onResetHighlight, showCalculations = false }) {
+    const [showMapSettings, setShowMapSettings] = useState(false);
+    const [draftMapVisible, setDraftMapVisible] = useState(isMapVisible);
+    const [draftLayer, setDraftLayer] = useState(mapLayer);
+    const [notice, setNotice] = useState('');
     return (
-        <div className="toolbar__filter">
-            <span>{label}</span>
-            <details ref={popupRef} onToggle={(event) => {
-                if (event.currentTarget.open) searchRef.current?.focus();
-                else setQuery('');
-            }} onBlur={(event) => {
-                if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) {
-                    event.currentTarget.open = false;
-                }
-            }} onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                    event.currentTarget.open = false;
-                    event.currentTarget.querySelector('summary').focus();
-                }
+        <nav className="main-menu" aria-label="Главное меню">
+            <h2>Меню</h2>
+            <button type="button" className="main-menu__item" aria-expanded={showMapSettings}
+                onClick={() => setShowMapSettings((value) => !value)}>
+                <span>Карта</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d={showMapSettings ? 'm5 15 7-7 7 7' : 'm5 9 7 7 7-7'} /></svg>
+            </button>
+            {showMapSettings && <form className="main-menu__map" onSubmit={(event) => {
+                event.preventDefault();
+                onApply(draftMapVisible, draftLayer);
             }}>
-                <summary aria-label={label} aria-disabled={disabled} onClick={(event) => {
-                    if (disabled) event.preventDefault();
-                }}>
-                    {options.find((option) => option.value === value)?.label ?? allLabel}
-                </summary>
-                <div className="toolbar__filter-popup">
-                    <input ref={searchRef} type="search" value={query} aria-label={`Поиск: ${label}`}
-                        placeholder="Поиск…" onChange={(event) => setQuery(event.target.value)} />
-                    <div className="toolbar__filter-results">
-                        {matches.map((option) => (
-                            <button key={option.value} type="button" aria-pressed={option.value === value}
-                                onClick={() => {
-                                    onChange(option.value);
-                                    popupRef.current.open = false;
-                                    popupRef.current.querySelector('summary').focus();
-                                }}>
-                                {option.label}
-                            </button>
-                        ))}
-                        {matches.length === 0 && <p role="status">Ничего не найдено</p>}
-                    </div>
-                </div>
-            </details>
-        </div>
+                <fieldset>
+                    <legend>Отображение карты</legend>
+                    <label><input type="checkbox" checked={draftMapVisible} onChange={(event) => setDraftMapVisible(event.target.checked)} />Показать карту</label>
+                    <label><input type="checkbox" checked={draftLayer === 'regions'} disabled={!draftMapVisible}
+                        onChange={(event) => setDraftLayer(event.target.checked ? 'regions' : 'base')} />Показать регионы</label>
+                    <label><input type="checkbox" checked={draftLayer === 'districts'} disabled={!draftMapVisible}
+                        onChange={(event) => setDraftLayer(event.target.checked ? 'districts' : 'base')} />Показать округа</label>
+                </fieldset>
+                <button type="submit" className="main-menu__apply">Применить</button>
+            </form>}
+            <button type="button" className="main-menu__item" onClick={onOpenHighlight}>Подсветить</button>
+            <button type="button" className="main-menu__item" onClick={() => { onResetHighlight(); setNotice('Подсветка сброшена.'); }}>Сбросить подсветку</button>
+            {showCalculations && <button type="button" className="main-menu__item" onClick={() => setNotice('Расчёты — раздел пока не настроен.')}>Расчёты</button>}
+            <p className="main-menu__notice" role="status">{notice}</p>
+        </nav>
     );
 }
 
@@ -67,52 +42,65 @@ function Toolbar({
     onMapLayerChange,
     onRefresh,
     isRefreshing,
-    boundaries,
-    district,
-    region,
-    onDistrictChange,
-    onRegionChange,
+    onOpenHighlight,
+    onResetHighlight,
 }) {
-    const regions = (boundaries?.regions ?? [])
-        .filter(({ properties }) => !district || properties.district === district)
-        .sort((a, b) => a.properties.name.localeCompare(b.properties.name, 'ru'));
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef(null);
+    const menuButtonRef = useRef(null);
+    const menuId = useId();
+    useEffect(() => {
+        if (!menuOpen) return;
+        const closeOutside = (event) => {
+            if (!menuRef.current?.contains(event.target)) setMenuOpen(false);
+        };
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') {
+                event.stopPropagation();
+                setMenuOpen(false);
+                menuButtonRef.current?.focus();
+            }
+        };
+        document.addEventListener('pointerdown', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [menuOpen]);
 
     return (
         <header className="toolbar">
-            <div className="toolbar__group" role="group" aria-label="Режим отображения">
-                <button type="button" className="toolbar__button" aria-pressed={isMapVisible}
-                    onClick={() => onMapVisibilityChange(true)}>Карта</button>
-                <button type="button" className="toolbar__button" aria-pressed={!isMapVisible}
-                    onClick={() => onMapVisibilityChange(false)}>Схема</button>
-            </div>
-            {isMapVisible && (
-                <div className="toolbar__layers">
-                    <span className="toolbar__label">Слои карты</span>
-                    <div className="toolbar__group" role="group" aria-label="Слои карты">
-                        {mapLayers.map(({ id, label }) => (
-                            <button key={id} type="button" className="toolbar__button"
-                                aria-pressed={mapLayer === id} onClick={() => onMapLayerChange(id)}>
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-            <div className="toolbar__filters" role="group" aria-label="Фильтры территории">
-                <TerritoryFilter label="Военный округ" allLabel="Все округа" value={district}
-                    onChange={onDistrictChange} disabled={!boundaries}
-                    options={[
-                        { value: '', label: 'Все округа' },
-                        ...(boundaries?.districts ?? []).map(({ properties }) => ({
-                            value: properties.district, label: properties.district,
-                        })),
-                    ]} />
-                <TerritoryFilter label="Регион" allLabel="Все регионы" value={region}
-                    onChange={onRegionChange} disabled={!boundaries}
-                    options={[
-                        { value: '', label: 'Все регионы' },
-                        ...regions.map(({ properties }) => ({ value: properties.shapeISO, label: properties.name })),
-                    ]} />
+            <div className="toolbar__menu-container" ref={menuRef}>
+            <button
+                type="button"
+                className="toolbar__button toolbar__menu"
+                aria-label="Меню"
+                title="Меню"
+                ref={menuButtonRef}
+                aria-expanded={menuOpen}
+                aria-controls={menuOpen ? menuId : undefined}
+                onClick={() => setMenuOpen((value) => !value)}
+            >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            {menuOpen && <div id={menuId}><MainMenu
+                isMapVisible={isMapVisible} mapLayer={mapLayer} onResetHighlight={onResetHighlight}
+                onOpenHighlight={() => {
+                    setMenuOpen(false);
+                    menuButtonRef.current?.focus();
+                    onOpenHighlight();
+                }}
+                onApply={(visible, layer) => {
+                    onMapLayerChange(layer);
+                    onMapVisibilityChange(visible);
+                    setMenuOpen(false);
+                    menuButtonRef.current?.focus();
+                }}
+            /></div>}
             </div>
             <button
                 type="button"

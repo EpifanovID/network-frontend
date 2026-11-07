@@ -1,370 +1,193 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { fetchJson } from '../utils/api';
+import { clampPassportPosition } from '../utils/passports';
 
-const demoNetworks = [
-    { name: 'Магистральная сеть', medium: 'Волоконно-оптический кабель', capacity: '10 Гбит/с' },
-    { name: 'Транспортная сеть', medium: 'Волоконно-оптический кабель', capacity: '1 Гбит/с' },
-    { name: 'Сеть диспетчерской связи', medium: 'Витая пара', capacity: '100 Мбит/с' },
-    { name: 'Сеть телеметрии', medium: 'Экранированная витая пара', capacity: '100 Мбит/с' },
-    { name: 'Сеть видеонаблюдения', medium: 'Витая пара', capacity: '1 Гбит/с' },
-    { name: 'Резервная сеть', medium: 'Волоконно-оптический кабель', capacity: '2,5 Гбит/с' },
+const nodeSections = [
+    'Все характеристики УС',
+    'Сетевые элементы УС',
+    'Схема УС',
+    'Каналы связи УС',
+    'Линии связи УС',
 ];
 
-function NodeProperties({ id, data, onClose }) {
-    const [result, setResult] = useState(null);
-    const [fullscreen, setFullscreen] = useState(false);
+function PassportActions({ sections }) {
+    const [placeholder, setPlaceholder] = useState('');
+    const headingId = useId();
+    const arrow = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>;
+    return <div className="passport__open">
+        <h3 id={headingId} className="passport__actions-title">Действия</h3>
+        <nav className="passport__menu" aria-labelledby={headingId}>
+            {sections.map(({ label, to }) => to
+                ? <Link key={label} to={to}><span>{label}</span>{arrow}</Link>
+                : <button type="button" key={label} onClick={() => setPlaceholder(label)}><span>{label}</span>{arrow}</button>)}
+        </nav>
+        <p className="passport__placeholder" role="status">{placeholder ? `${placeholder} — раздел пока не настроен.` : ''}</p>
+    </div>;
+}
+
+function NodeSummary({ data }) {
+    const [identity, setIdentity] = useState(null);
 
     useEffect(() => {
         const controller = new AbortController();
-        fetchJson(`/api/nodes/${encodeURIComponent(data.id)}/properties`, {
-            signal: controller.signal,
-        }).then(({ properties }) => {
-            if (!Array.isArray(properties)) throw new Error('Неверный формат свойств.');
-            if (!controller.signal.aborted) setResult({ properties });
-        }).catch(() => {
-            if (!controller.signal.aborted) setResult({ error: true });
-        });
+        fetchJson(`/api/nodes/${encodeURIComponent(data.id)}/properties`, { signal: controller.signal })
+            .then(({ properties }) => {
+                if (!Array.isArray(properties)) return;
+                const callsign = properties.find(({ name }) => /^\s*позывной/i.test(name))?.value;
+                const nodeClass = properties.find(({ name }) => /^\s*класс(?:\s|$|\()/i.test(name))?.value;
+                if (!controller.signal.aborted) setIdentity({ callsign, nodeClass });
+            }).catch(() => {
+                // The graph label remains usable when optional identity properties are unavailable.
+            });
         return () => controller.abort();
     }, [data.id]);
 
-    return (
-        <section
-            id={id}
-            className={`passport__card passport__properties${fullscreen ? ' passport__properties--fullscreen' : ''}`}
-            aria-labelledby={`${id}-title`}
-        >
-            <div className="passport__title passport__properties-header">
-                <h2 id={`${id}-title`}>Характеристики узла связи · {data.label}</h2>
-                <div className="passport__properties-actions">
-                    <button
-                        type="button"
-                        className="passport__properties-control"
-                        aria-label={fullscreen ? 'Вернуть обычный размер' : 'Развернуть на весь экран'}
-                        title={fullscreen ? 'Вернуть обычный размер' : 'Развернуть на весь экран'}
-                        onClick={() => setFullscreen((expanded) => !expanded)}
-                    >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true">
-                            <path d={fullscreen ? 'M6 2v4H2m8 8v-4h4M2 10h4v4m8-8h-4V2' : 'M2 6V2h4m4 12h4v-4M6 14H2v-4m8-8h4v4'} />
-                        </svg>
-                    </button>
-                    <button type="button" className="passport__properties-control" aria-label="Закрыть характеристики" onClick={onClose}>
-                        ×
-                    </button>
-                </div>
-            </div>
-            {!result && <p role="status">Загружаю свойства…</p>}
-            {result?.error && <p role="alert">Не удалось загрузить свойства. Закройте карточку и откройте её снова.</p>}
-            {result?.properties?.length === 0 && <p>Для этого узла свойства не заданы.</p>}
-            {result?.properties?.length > 0 && (
-                <dl className="passport__properties-list">
-                    {result.properties.map(({ id: propertyId, name, value }) => (
-                        <div className="passport__row" key={propertyId}>
-                            <dt className="passport__label">{name}</dt>
-                            <dd className="passport__value">{value ?? '—'}</dd>
-                        </div>
-                    ))}
-                </dl>
-            )}
-            <h3 id={`${id}-network`} className="passport__network-title">Сеть</h3>
-            <p className="passport__network-caption">Демонстрационные подключения</p>
-            <ul className="passport__networks" tabIndex={0} aria-labelledby={`${id}-network`}>
-                {Array.from({ length: 36 }, (_, index) => {
-                    const { name, medium, capacity } = demoNetworks[index % demoNetworks.length];
-                    const number = String(index + 1).padStart(2, '0');
-                    return (
-                        <li key={number}>
-                            <strong>{name} · {number}</strong>
-                            <span>{medium} КБ-{number} · {capacity}</span>
-                        </li>
-                    );
-                })}
-            </ul>
-        </section>
-    );
+    const callsign = data.callsign || identity?.callsign || data.label;
+    const rawClass = String(data.nodeClass || identity?.nodeClass || '').trim().toUpperCase();
+    const nodeClass = /^[ABC]$/.test(rawClass) ? rawClass : '—';
+
+    return <>
+        <div className="passport__node-summary">
+            <div className="passport__summary-row"><span>Позывной</span><strong>{callsign}</strong></div>
+            <div className="passport__summary-row"><span>Класс</span><strong className="passport__class" aria-label={`Класс узла связи: ${nodeClass}`}>{nodeClass}</strong></div>
+        </div>
+        <PassportActions sections={nodeSections.map((label) => ({ label,
+            to: label === 'Схема УС' ? `/objects/${data.id}` : undefined,
+        }))} />
+    </>;
 }
 
-function Passport({
-    type,
-    data,
-    position,
-    elementRef,
-    onCoordinatesChange,
-    onFocusLocation,
-}) {
-    const [longitude, setLongitude] = useState(() => String(data?.lng ?? ''));
-    const [latitude, setLatitude] = useState(() => String(data?.lat ?? ''));
-    const [coordinateError, setCoordinateError] = useState('');
-    const [savingCoordinates, setSavingCoordinates] = useState(false);
-    const [showProperties, setShowProperties] = useState(false);
-    const propertiesId = useId();
-    const propertiesButtonRef = useRef(null);
-    const localElementRef = useRef(null);
-    const isLine = data?.isLine || /линия связи/i.test(data?.templateName || data?.type || '');
-    const hasProperties = type === 'node' && !isLine && /узел связи/i.test(data?.templateName || data?.type || '');
+export default function Passport({ type, data, position, elementRef, onClose, onPin, passportId, stackOrder = 0,
+    detachedPosition, onMove, onReattach, minimized, onMinimize }) {
+    const localRef = useRef(null);
+    const dragRef = useRef(null);
+    const titleId = useId();
+    const isLine = type === 'edge' || data?.isLine || /линия связи/i.test(data?.templateName || data?.type || '');
 
     useLayoutEffect(() => {
-        if (elementRef || !position) return;
-        const element = localElementRef.current;
-        if (!element) return;
+        const element = localRef.current;
+        if (!element || !position || minimized) return;
+        const toolbar = element.parentElement?.querySelector('.passport-tabs') ?? element.parentElement?.querySelector('.toolbar');
         const keepVisible = () => {
+            const toolbarBottom = toolbar?.getBoundingClientRect().bottom ?? 0;
+            const top = Math.max(12, Math.min(toolbarBottom + 12, window.innerHeight - 120));
+            element.style.setProperty('--passport-available-height', `${Math.max(100, window.innerHeight - top - 12)}px`);
+            if (elementRef) return;
             const { width, height } = element.getBoundingClientRect();
-            const toolbarBottom = element.parentElement?.querySelector('.toolbar')?.getBoundingClientRect().bottom ?? 0;
             element.style.left = `${Math.max(12, Math.min(position.x, window.innerWidth - width - 12))}px`;
-            element.style.top = `${Math.max(toolbarBottom + 12, Math.min(position.y, window.innerHeight - height - 12))}px`;
+            element.style.top = `${Math.max(top, Math.min(position.y, window.innerHeight - height - 12))}px`;
         };
         keepVisible();
         const observer = new ResizeObserver(keepVisible);
         observer.observe(element);
+        if (toolbar) observer.observe(toolbar);
         window.addEventListener('resize', keepVisible);
-        return () => {
-            observer.disconnect();
-            window.removeEventListener('resize', keepVisible);
-        };
-    }, [elementRef, position]);
+        return () => { observer.disconnect(); window.removeEventListener('resize', keepVisible); };
+    }, [elementRef, position, minimized]);
 
-    if (!data || !position) {
-        return null;
-    }
+    if (!data || !position) return null;
+    const objectId = type === 'edge' ? data.lineId : data.id;
+    const endpointLabel = type === 'edge' ? `${data.sourceLabel || data.source} ↔ ${data.targetLabel || data.target}` : data.endpointLabel;
 
-    const handleCoordinatesSubmit = async (event) => {
-        event.preventDefault();
-        const lng = Number(longitude);
-        const lat = Number(latitude);
-        if (
-            longitude.trim() === ''
-            || latitude.trim() === ''
-            || !Number.isFinite(lng)
-            || !Number.isFinite(lat)
-            || lng < -180
-            || lng > 180
-            || lat < -90
-            || lat > 90
-        ) {
-            setCoordinateError('Введите долготу от −180 до 180 и широту от −90 до 90.');
-            return;
-        }
-
-        setCoordinateError('');
-        setSavingCoordinates(true);
-        try {
-            await onCoordinatesChange?.({ id: data.id, lng, lat });
-            setLongitude(String(lng));
-            setLatitude(String(lat));
-        } catch (error) {
-            setCoordinateError(error.message || 'Не удалось сохранить координаты.');
-        } finally {
-            setSavingCoordinates(false);
-        }
+    const constrain = (point) => {
+        const bounds = localRef.current.getBoundingClientRect();
+        const parent = localRef.current.parentElement;
+        const toolbarBottom = (parent?.querySelector('.passport-tabs') ?? parent?.querySelector('.toolbar'))?.getBoundingClientRect().bottom ?? 0;
+        return clampPassportPosition({ ...point, width: bounds.width, height: bounds.height }, {
+            left: 12, top: Math.max(12, Math.min(toolbarBottom + 12, window.innerHeight - 120)),
+            right: window.innerWidth - 12, bottom: window.innerHeight - 12,
+        });
+    };
+    const finishDrag = (event, cancel = false) => {
+        const drag = dragRef.current;
+        if (!drag || ('pointerId' in event && event.pointerId !== drag.pointerId)) return;
+        dragRef.current = null;
+        delete localRef.current.dataset.dragging;
+        if (event.currentTarget.hasPointerCapture(drag.pointerId)) event.currentTarget.releasePointerCapture(drag.pointerId);
+        if (!drag.moved) return;
+        if (cancel) {
+            if (drag.originalPosition) onMove(drag.originalPosition);
+            else onReattach();
+        } else onMove(drag.lastPosition);
     };
 
     return (
-        <div
-            ref={elementRef || localElementRef}
-            className={`passport${type === 'node' ? ' passport--object' : ''}${showProperties ? ' passport--expanded' : ''}`}
-            style={{
-                left: `${position.x}px`,
-                top: `${position.y}px`,
-            }}
-        >
-            <div className="passport__card passport__summary">
-                {type === 'node' && (
-                    <>
-                        <div className="passport__title">
-                            Паспорт объекта
-                            <span className="passport__subtitle">{data.label}</span>
-                        </div>
-                        {data.endpointLabel && (
-                            <div className="passport__row">
-                                <span className="passport__label">Соединяет:</span>
-                                <span className="passport__value">{data.endpointLabel}</span>
-                            </div>
-                        )}
-
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                Наименование:
-                            </span>
-
-                            <span className="passport__value">
-                                {data.label}
-                            </span>
-                        </div>
-
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                ID:
-                            </span>
-
-                            <span className="passport__value passport__value--id">
-                                {data.id}
-                            </span>
-                        </div>
-
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                Тип:
-                            </span>
-
-                            <span className="passport__value">
-                                {data.type || '—'}
-                            </span>
-                        </div>
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                Шаблон:
-                            </span>
-                            <span className="passport__value">
-                                {data.templateName || '—'}
-                            </span>
-                        </div>
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                Тематический срез:
-                            </span>
-                            <span className="passport__value">
-                                {data.layerName || '—'}
-                            </span>
-                        </div>
-
-                        <form
-                            className="passport__coordinates"
-                            onSubmit={handleCoordinatesSubmit}
-                        >
-                            <span className="passport__section-title">Координаты на карте</span>
-                            <label className="passport__coordinate-field">
-                                <span>Долгота</span>
-                                <input
-                                    type="number"
-                                    min="-180"
-                                    max="180"
-                                    step="any"
-                                    value={longitude}
-                                    onChange={(event) => setLongitude(event.target.value)}
-                                    required
-                                />
-                            </label>
-                            <label className="passport__coordinate-field">
-                                <span>Широта</span>
-                                <input
-                                    type="number"
-                                    min="-90"
-                                    max="90"
-                                    step="any"
-                                    value={latitude}
-                                    onChange={(event) => setLatitude(event.target.value)}
-                                    required
-                                />
-                            </label>
-                            {coordinateError && (
-                                <div className="passport__coordinate-error" role="alert">
-                                    {coordinateError}
-                                </div>
-                            )}
-                            <button
-                                className="passport__action"
-                                type="submit"
-                                disabled={savingCoordinates}
-                            >
-                                {savingCoordinates ? 'Сохраняю…' : 'Сохранить и показать на карте'}
-                            </button>
-                            {Number.isFinite(data.lng) && Number.isFinite(data.lat) && (
-                                <button
-                                    className="passport__action passport__action--secondary"
-                                    type="button"
-                                    onClick={() => onFocusLocation?.(data.lng, data.lat)}
-                                >
-                                    Показать текущее место
-                                </button>
-                            )}
-                        </form>
-
-                        <div className="passport__footer">
-                            <Link to={isLine ? `/lines/${data.id}` : `/objects/${data.id}`} className="passport__link">
-                                {isLine ? 'Состав линии связи →' : 'Состав узла связи →'}
-                            </Link>
-                            {hasProperties && (
-                                <button
-                                    ref={propertiesButtonRef}
-                                    type="button"
-                                    className="passport__action passport__action--secondary"
-                                    aria-expanded={showProperties}
-                                    aria-controls={showProperties ? propertiesId : undefined}
-                                    onClick={() => setShowProperties((visible) => !visible)}
-                                >
-                                    Все свойства
-                                </button>
-                            )}
-                        </div>
-                    </>
-                )}
-
-                {type === 'edge' && (
-                    <>
-                        <div className="passport__title">
-                            Паспорт соединения
-                            <span className="passport__subtitle">
-                                {data.sourceLabel || data.source} ↔ {data.targetLabel || data.target}
-                            </span>
-                        </div>
-
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                ID:
-                            </span>
-
-                            <span className="passport__value passport__value--id">
-                                {data.lineId || data.id}
-                            </span>
-                        </div>
-
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                Источник:
-                            </span>
-
-                            <span className="passport__value">
-                                {data.sourceLabel || data.source}
-                            </span>
-                        </div>
-
-                        <div className="passport__row">
-                            <span className="passport__label">
-                                Приёмник:
-                            </span>
-
-                            <span className="passport__value">
-                                {data.targetLabel || data.target}
-                            </span>
-                        </div>
-                        {data.label && (
-                            <div className="passport__row">
-                                <span className="passport__label">Связь:</span>
-                                <span className="passport__value">{data.label}</span>
-                            </div>
-                        )}
-                        {data.relationLabel && (
-                            <div className="passport__row">
-                                <span className="passport__label">Отношение:</span>
-                                <span className="passport__value">{data.relationLabel}</span>
-                            </div>
-                        )}
-                        {data.lineId && <Link to={`/lines/${data.lineId}`} className="passport__link">Состав линии связи →</Link>}
-                    </>
-                )}
-            </div>
-            {hasProperties && showProperties && (
-                <NodeProperties
-                    id={propertiesId}
-                    data={data}
-                    onClose={() => {
-                        setShowProperties(false);
-                        propertiesButtonRef.current?.focus();
-                    }}
-                />
-            )}
-        </div>
+        <section ref={(element) => { localRef.current = element; if (elementRef) elementRef.current = element; }}
+            className={`passport${isLine ? ' passport--line' : ' passport--node'}${detachedPosition ? ' passport--detached' : ''}`}
+            data-passport-key={passportId}
+            hidden={minimized}
+            style={{ left: detachedPosition?.x ?? position.x, top: detachedPosition?.y ?? position.y, zIndex: 1000 + stackOrder }} aria-labelledby={titleId}
+            onPointerDownCapture={onPin} onFocusCapture={onPin}>
+            <button type="button" className="passport__icon-button passport__close" aria-label="Закрыть паспорт" title="Закрыть паспорт · Esc" onClick={onClose}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+            </button>
+            <button type="button" className="passport__icon-button passport__minimize" aria-label="Свернуть паспорт" title="Свернуть паспорт" onClick={onMinimize}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M6 12h12" /></svg>
+            </button>
+            {detachedPosition && <button type="button" className="passport__icon-button passport__reattach"
+                aria-label={`Привязать паспорт к ${data.label || 'объекту'}`} title={`Вернуть паспорт к ${data.label || 'объекту'}`}
+                onClick={() => {
+                    onReattach();
+                    requestAnimationFrame(() => localRef.current?.querySelector('.passport__identity')?.focus({ preventScroll: true }));
+                }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="m9 15 6-6m-5-3 2-2a5 5 0 0 1 7 7l-2 2M7 11l-2 2a5 5 0 0 0 7 7l2-2" /></svg>
+            </button>}
+            <header className="passport__identity" tabIndex={0}
+                aria-label={`Переместить паспорт ${data.label || ''}. Используйте мышь или клавиши со стрелками.`}
+                title={detachedPosition ? 'Паспорт откреплён. Перетащите за заголовок; кнопка связи вернёт его к объекту.' : 'Перетащите за заголовок, чтобы открепить паспорт от объекта'}
+                onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const bounds = localRef.current.getBoundingClientRect();
+                    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+                        x: bounds.x, y: bounds.y, moved: false, originalPosition: detachedPosition };
+                    localRef.current.dataset.dragging = 'true';
+                    event.currentTarget.focus({ preventScroll: true });
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={(event) => {
+                    const drag = dragRef.current;
+                    if (!drag || event.pointerId !== drag.pointerId) return;
+                    const dx = event.clientX - drag.startX, dy = event.clientY - drag.startY;
+                    if (!drag.moved && dx * dx + dy * dy < 16) return;
+                    const point = constrain({ x: drag.x + dx, y: drag.y + dy });
+                    localRef.current.style.left = `${point.x}px`;
+                    localRef.current.style.top = `${point.y}px`;
+                    drag.lastPosition = point;
+                    if (!drag.moved) { drag.moved = true; onMove(point); }
+                }}
+                onPointerUp={finishDrag}
+                onPointerCancel={finishDrag}
+                onLostPointerCapture={finishDrag}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape' && dragRef.current) {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        finishDrag(event, true);
+                        return;
+                    }
+                    const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+                    const move = moves[event.key];
+                    if (!move) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const bounds = localRef.current.getBoundingClientRect();
+                    const step = event.shiftKey ? 40 : 10;
+                    onMove(constrain({ x: bounds.x + move[0] * step, y: bounds.y + move[1] * step }));
+                }}>
+                <h2 id={titleId}>Паспорт {data.label || (isLine ? 'ЛС' : 'УС')}</h2>
+                {isLine && <p>Линия связи</p>}
+            </header>
+            {isLine ? <>
+                <div className="passport__line-body">
+                    {endpointLabel && <div className="passport__route"><span>Соединяет</span><strong>{endpointLabel}</strong></div>}
+                    {data.relationLabel && <p className="passport__muted">{data.relationLabel}</p>}
+                    <div className="passport__line-id"><span>ID линии</span><p className="passport__value--id">{objectId || data.id}</p></div>
+                </div>
+                <PassportActions sections={[{ label: 'Все характеристики ЛС' }, { label: 'КС через ЛС' }]} />
+            </> : <NodeSummary key={data.id} data={data} />}
+        </section>
     );
 }
-
-export default Passport;

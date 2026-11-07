@@ -58,7 +58,8 @@ export function createApp(pool, { staticDirectory } = {}) {
                         kind.name AS "type",
                         template.name AS "templateName",
                         location.longitude AS lng,
-                        location.latitude AS lat
+                        location.latitude AS lat,
+                        highlight.properties AS "highlightProperties"
                     FROM imc.thematic_layers_sfes AS sfe
                     JOIN imc.thematic_layers AS layer
                         ON layer.id_layer = sfe.id_layer
@@ -68,6 +69,21 @@ export function createApp(pool, { staticDirectory } = {}) {
                         ON kind.id_sfe_kind = template.id_sfe_kind
                     LEFT JOIN imc.network_node_locations AS location
                         ON location.id_sfe = sfe.id_sfe
+                    LEFT JOIN LATERAL (
+                        SELECT jsonb_object_agg(definition.name_rus,
+                            CASE WHEN property.id_sfe_property IS NULL
+                                THEN COALESCE(default_record.value, definition.dv)
+                                ELSE COALESCE(saved_record.value, property.val)
+                            END) AS properties
+                        FROM imc.sfet_properties AS definition
+                        LEFT JOIN imc.thematic_layers_sfe_properties AS property
+                            ON property.id_sfe = sfe.id_sfe
+                            AND property.id_sfet_property = definition.id_sfet_property
+                        LEFT JOIN imc.dc_records AS saved_record ON saved_record.id_record = property.val_by_id_pvd_record
+                        LEFT JOIN imc.dc_records AS default_record ON default_record.id_record = definition.dv_by_if_pv_record
+                        WHERE definition.id_sfet = sfe.id_sfet
+                            AND definition.name_rus ~* '^(класс( |$|[(])|.*интерфейс)'
+                    ) AS highlight ON true
                     WHERE ($1::uuid IS NULL OR sfe.id_layer = $1::uuid)
                     ORDER BY layer.name, sfe.vr_code, sfe.id_sfe`,
                     values
@@ -105,6 +121,7 @@ export function createApp(pool, { staticDirectory } = {}) {
                     templateName: row.templateName,
                     layerId: row.layerId,
                     layerName: row.layerName,
+                    ...(row.highlightProperties && { highlightProperties: row.highlightProperties }),
                 },
             }));
             const edges = edgeResult.rows.map((row) => ({
