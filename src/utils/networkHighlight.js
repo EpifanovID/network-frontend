@@ -36,6 +36,22 @@ export function hasHighlightCriteria(filters) {
         || filters.interfaces.length || isPair(filters.betweenRegions) || isPair(filters.betweenDistricts));
 }
 
+export function describeHighlightFilters(filters, boundaries) {
+    if (!hasHighlightCriteria(filters)) return 'Без фильтра';
+
+    const regionNames = new Map(boundaries?.regions.map(({ properties }) => [properties.shapeISO, properties.name]));
+    const regionName = (id) => regionNames.get(id) ?? id;
+    const parts = [];
+    if (filters.regions.length) parts.push(filters.regions.map(regionName).join(', '));
+    if (filters.districts.length) parts.push(filters.districts.join(', '));
+    if (filters.classes.length) parts.push(`Класс узлов: ${filters.classes.join(', ')}`);
+    if (isPair(filters.betweenRegions)) parts.push(`Линии: ${filters.betweenRegions.map(regionName).join(' ↔ ')}`);
+    if (isPair(filters.betweenDistricts)) parts.push(`Линии: ${filters.betweenDistricts.join(' ↔ ')}`);
+    if (filters.interfaces.length) parts.push(`Интерфейсы: ${filters.interfaces.join(', ')}`);
+    if (filters.hideOthers) parts.push('Скрыто остальное');
+    return parts.join(' · ');
+}
+
 export function buildNetworkHighlight(objects, relations, boundaries, filters) {
     if (!hasHighlightCriteria(filters)) return null;
 

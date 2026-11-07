@@ -36,6 +36,7 @@ function MainMenu({ isMapVisible, mapLayer, onApply, onOpenHighlight, onResetHig
 }
 
 function Toolbar({
+    appliedFilter,
     isMapVisible,
     onMapVisibilityChange,
     mapLayer,
@@ -101,6 +102,10 @@ function Toolbar({
                     menuButtonRef.current?.focus();
                 }}
             /></div>}
+            </div>
+            <div className="toolbar__context">
+                <h1>Схема: МТХХ <span>(информационная модель 1)</span></h1>
+                <p title={appliedFilter}>Тематический срез: <span>{appliedFilter}</span></p>
             </div>
             <button
                 type="button"

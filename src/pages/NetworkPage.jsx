@@ -4,20 +4,66 @@ import { createRef, useCallback, useEffect, useMemo, useRef, useState } from 're
 import Toolbar from '../components/Toolbar';
 import RoutedEdge from '../components/RoutedEdge';
 import HighlightDialog from '../components/HighlightDialog';
-import { buildNetworkHighlight, emptyHighlight, getManualHighlight } from '../utils/networkHighlight';
+import { buildNetworkHighlight, describeHighlightFilters, emptyHighlight, getManualHighlight } from '../utils/networkHighlight';
 import { buildExpandableNetwork, getNetworkSelection } from '../utils/fullNetwork';
 import PhysicalMap from '../components/PhysicalMap';
 import NetworkNode from '../components/NetworkNode';
 import { diagramEdgeOptions } from '../components/diagramEdges';
 import NetworkNodeContent from '../components/NetworkNodeContent';
 import Passport from '../components/Passport';
-import { arrangePassports, openPassport, passportKey } from '../utils/passports';
+import { arrangePassports, clampPassportPosition, isPassportDetail, openPassport, passportDetailTitles, passportKey, sidePassportPosition } from '../utils/passports';
 import { fetchJson } from '../utils/api';
 import { buildMapEdges } from '../utils/mapGraph';
 import { loadBoundaryData } from '../utils/mapLayers';
 
 import '@xyflow/react/dist/style.css';
 import '../App.css';
+
+function passportDetailCard(item, element, fallbackAnchor) {
+    return {
+        key: passportKey(item),
+        ...item.position,
+        width: element.offsetWidth,
+        height: element.offsetHeight,
+        anchorKey: item.parentKey,
+        fallbackAnchor,
+        nodeAnchor: fallbackAnchor,
+    };
+}
+
+function positionPassportWindows(cards, bounds, elements) {
+    const visible = [];
+    const markers = [];
+    for (const card of cards) {
+        const anchor = card.nodeAnchor;
+        if (anchor && (anchor.x + anchor.width <= bounds.left || anchor.x >= bounds.right
+            || anchor.y + anchor.height <= bounds.top || anchor.y >= bounds.bottom)) {
+            const targetX = anchor.x + anchor.width / 2;
+            const targetY = anchor.y + anchor.height / 2;
+            const button = elements.get(card.key).current.querySelector('.passport__offscreen-marker');
+            const width = button.offsetWidth;
+            const height = button.offsetHeight;
+            const marker = { key: card.key, x: targetX - width / 2, y: targetY - height / 2, width, height };
+            const point = clampPassportPosition(marker, bounds);
+            markers.push({ ...marker, ...point, targetX, targetY });
+        } else {
+            visible.push(card);
+        }
+    }
+
+    for (const { key, x, y, height, targetX, targetY } of [...arrangePassports(visible, bounds), ...arrangePassports(markers, bounds)]) {
+        const element = elements.get(key).current;
+        if (element.dataset.dragging) continue;
+        const offscreen = targetX !== undefined;
+        element.toggleAttribute('data-offscreen', offscreen);
+        if (offscreen) {
+            const angle = Math.atan2(targetY - y - height / 2, targetX - x - 18);
+            element.style.setProperty('--passport-marker-angle', `${angle}rad`);
+        }
+        element.style.left = `${x}px`;
+        element.style.top = `${y}px`;
+    }
+}
 
 function hasCoordinates(node) {
     return Number.isFinite(node.lng) && Number.isFinite(node.lat);
@@ -76,6 +122,9 @@ function MapGraphOverlay({
     const updateMapRef = useRef(null);
     const hasInitialFitRef = useRef(false);
     const selectedKeys = new Set(showPassportHighlights ? passports.map(passportKey) : []);
+    for (const item of passports) {
+        if (item.routeHighlighted && item.lineKey) selectedKeys.add(item.lineKey);
+    }
     const selectedEdges = edges.filter((edge) => highlight?.lines.has(highlight.edgeIdsOnly ? edge.id : edge.lineId ?? edge.id)
         || selectedKeys.has(passportKey({ type: 'edge', data: edge })));
     const selectedEdgeIds = new Set(selectedEdges.map((edge) => edge.id));
@@ -218,25 +267,41 @@ function MapGraphOverlay({
                 if (!element) continue;
                 if (activePassport.detachedPosition || element.dataset.dragging) {
                     const point = element.dataset.dragging ? element.getBoundingClientRect() : activePassport.detachedPosition;
-                    cards.push({ key, x: point.x, y: point.y, width: element.offsetWidth, height: element.offsetHeight, fixed: true });
+                    cards.push({ key, x: point.x, y: point.y, width: element.offsetWidth, height: element.offsetHeight,
+                        fixed: true, detached: Boolean(activePassport.detachedPosition) });
+                    continue;
+                }
+                const isDetail = isPassportDetail(activePassport.type);
+                const isLineDetail = Boolean(activePassport.lineKey);
+                if ((isDetail && !isLineDetail) || (activePassport.type === 'node' && !activePassport.data.isLine)) {
+                    const point = points.get(activePassport.data.id);
+                    const anchor = point && {
+                        ...point,
+                        x: bounds.left + point.x - point.width / 2,
+                        y: bounds.top + point.y - point.height / 2,
+                    };
+                    if (isDetail) {
+                        cards.push(passportDetailCard(activePassport, element, anchor));
+                    } else {
+                        const card = { key, ...activePassport.position, width: element.offsetWidth, height: element.offsetHeight };
+                        cards.push(anchor ? { ...card, nodeAnchor: anchor,
+                            ...sidePassportPosition(card, anchor, { left: 12, right: bounds.right - 12 }) } : card);
+                    }
                     continue;
                 }
                 let anchorX, anchorY;
-                if (activePassport.type === 'node' && !activePassport.data.isLine) {
-                    const point = points.get(activePassport.nodeId);
-                    if (point) {
-                        anchorX = point.x + point.width / 2;
-                        anchorY = point.y - point.height / 2;
-                    }
-                } else {
-                    const matchingEdge = edges.find((edge) => passportKey({ type: 'edge', data: edge }) === key);
-                    const exactSegment = edgeSegments.get(activePassport.data.id);
-                    const segment = exactSegment ?? edgeSegments.get(matchingEdge?.id);
-                    if (segment) {
-                        const t = exactSegment ? activePassport.anchorT ?? 0.5 : 0.5;
-                        anchorX = segment.x1 + (segment.x2 - segment.x1) * t;
-                        anchorY = segment.y1 + (segment.y2 - segment.y1) * t;
-                    }
+                const matchingEdge = edges.find((edge) => passportKey({ type: 'edge', data: edge }) === (activePassport.lineKey ?? key));
+                const exactSegment = edgeSegments.get(activePassport.data.id);
+                const segment = exactSegment ?? edgeSegments.get(matchingEdge?.id);
+                if (segment) {
+                    const t = exactSegment ? activePassport.anchorT ?? 0.5 : 0.5;
+                    anchorX = segment.x1 + (segment.x2 - segment.x1) * t;
+                    anchorY = segment.y1 + (segment.y2 - segment.y1) * t;
+                }
+                if (isLineDetail) {
+                    const anchor = segment && { x: bounds.left + anchorX, y: bounds.top + anchorY, width: 1, height: 1 };
+                    cards.push(passportDetailCard(activePassport, element, anchor));
+                    continue;
                 }
                 const width = element.offsetWidth, height = element.offsetHeight;
                 if (anchorX == null) {
@@ -248,15 +313,9 @@ function MapGraphOverlay({
                     y: bounds.top + anchorY });
             }
             const tabsBottom = overlay.parentElement?.querySelector('.passport-tabs')?.getBoundingClientRect().bottom;
-            const positions = arrangePassports(cards, {
+            positionPassportWindows(cards, {
                 left: 12, top: (tabsBottom ?? bounds.top) + 12, right: bounds.width - 12, bottom: bounds.bottom - 12,
-            });
-            positions.forEach(({ key, x, y }) => {
-                const element = passportElements.get(key).current;
-                if (element.dataset.dragging) return;
-                element.style.left = `${x}px`;
-                element.style.top = `${y}px`;
-            });
+            }, passportElements);
         };
         updateMapRef.current = update;
 
@@ -494,6 +553,7 @@ function NetworkPage() {
         setActivePassportId(key);
         setPassports((current) => current.map((item) => {
             if (passportKey(item) !== key) return item;
+            if (isPassportDetail(item.type)) return { ...item, pinned: true, detachedPosition: null };
             const source = item.nodeId && document.querySelector(
                 `[data-passport-id="${CSS.escape(item.nodeId)}"], .react-flow__node[data-id="${CSS.escape(item.nodeId)}"]`
             );
@@ -586,7 +646,19 @@ function NetworkPage() {
         });
     }, [togglePassport]);
     const selection = { nodeIds: new Set(), edgeIds: new Set() };
-    if (!isMapVisible && !manualView) visiblePassports.forEach((item) => {
+    if (!isMapVisible) visiblePassports.forEach((item) => {
+        if (item.type === 'channel-passport') {
+            if (!item.routeHighlighted) return;
+            for (const edge of graph.edges) {
+                if (passportKey({ type: 'edge', data: edge }) !== item.lineKey) continue;
+                selection.edgeIds.add(edge.id);
+                selection.nodeIds.add(edge.source);
+                selection.nodeIds.add(edge.target);
+            }
+            if (item.data.lineId) selection.nodeIds.add(item.data.lineId);
+            return;
+        }
+        if (manualView) return;
         const selected = getNetworkSelection(graph, item);
         selected.nodeIds.forEach((id) => selection.nodeIds.add(id));
         selected.edgeIds.forEach((id) => selection.edgeIds.add(id));
@@ -705,7 +777,27 @@ function NetworkPage() {
             if (!element) return [];
             if (item.detachedPosition || element.dataset.dragging) {
                 const point = element.dataset.dragging ? element.getBoundingClientRect() : item.detachedPosition;
-                return [{ key, x: point.x, y: point.y, width: element.offsetWidth, height: element.offsetHeight, fixed: true }];
+                return [{ key, x: point.x, y: point.y, width: element.offsetWidth, height: element.offsetHeight,
+                    fixed: true, detached: Boolean(item.detachedPosition) }];
+            }
+            const isDetail = isPassportDetail(item.type);
+            if (isDetail || (item.type === 'node' && !item.data.isLine)) {
+                const anchorId = CSS.escape(item.data.lineId ?? item.data.id);
+                const node = document.querySelector(`.react-flow__node[data-id="${anchorId}"], [data-passport-id="${anchorId}"]`);
+                const anchor = node?.getBoundingClientRect();
+                if (isDetail) {
+                    if (!item.lineKey || anchor) return [passportDetailCard(item, element, anchor)];
+                    const edge = graph.edges.find((candidate) => passportKey({ type: 'edge', data: candidate }) === item.lineKey);
+                    const path = edge && document.querySelector(`.react-flow__edge[data-id="${CSS.escape(edge.id)}"] .react-flow__edge-path`);
+                    const bounds = path?.getBoundingClientRect();
+                    const midpoint = bounds && { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2, width: 1, height: 1 };
+                    return [passportDetailCard(item, element, midpoint)];
+                }
+                if (anchor) {
+                    const card = { key, width: element.offsetWidth, height: element.offsetHeight };
+                    return [{ ...card, nodeAnchor: anchor,
+                        ...sidePassportPosition(card, anchor, { left: 12, right: window.innerWidth - 12 }) }];
+                }
             }
             let point = item.position;
             if (item.flowAnchor) {
@@ -723,13 +815,9 @@ function NetworkPage() {
             }
             return [{ key, ...point, width: element.offsetWidth, height: element.offsetHeight }];
         });
-        arrangePassports(cards, { left: 12, top: toolbarBottom + 12, right: window.innerWidth - 12, bottom: window.innerHeight - 12 })
-            .forEach(({ key, x, y }) => {
-                const element = passportElements.get(key).current;
-                if (element.dataset.dragging) return;
-                element.style.left = `${x}px`;
-                element.style.top = `${y}px`;
-            });
+        positionPassportWindows(cards, {
+            left: 12, top: toolbarBottom + 12, right: window.innerWidth - 12, bottom: window.innerHeight - 12,
+        }, passportElements);
     }, [isMapVisible, visiblePassports, passportElements, graph.edges]);
 
     useEffect(() => {
@@ -817,6 +905,28 @@ function NetworkPage() {
         setActivePassportId(key);
         setPassports((current) => current.map((item) => passportKey(item) === key
             ? { ...item, minimized: false, pinned: true } : item));
+    };
+
+    const openPassportDetail = (parent, type, data) => {
+        cancelPassportHover();
+        const width = Math.min(560, window.innerWidth - 24);
+        const position = { x: (window.innerWidth - width) / 2, y: 112 };
+        const parentKey = passportKey(parent);
+        const next = {
+            type,
+            data: { ...data, label: `${passportDetailTitles[type]} ${data.marker ?? `№ ${data.number}`}` },
+            parentKey,
+            lineKey: parent.lineKey ?? (data.marker ? parentKey : undefined),
+            position,
+            pinned: true,
+        };
+        const key = passportKey(next);
+        setActivePassportId(key);
+        setPassports((current) => openPassport(current, next).map((item) => passportKey(item) === key
+            ? { ...item, data: next.data, parentKey, lineKey: next.lineKey, minimized: false } : item));
+        requestAnimationFrame(() => {
+            document.querySelector(`[data-passport-key="${CSS.escape(key)}"] .passport__identity`)?.focus({ preventScroll: true });
+        });
     };
 
     const handleBackgroundClick = (event) => {
@@ -973,6 +1083,9 @@ function NetworkPage() {
                 }
             }}>
             <Toolbar
+                appliedFilter={manualApplied
+                    ? `Ручной выбор: ${manualApplied.nodes.size} · ${manualApplied.hideOthers ? 'Только выбранные' : 'Подсветка выбранных'}`
+                    : describeHighlightFilters(highlightFilters, boundaries)}
                 isMapVisible={isMapVisible}
                 onMapVisibilityChange={handleMapVisibilityChange}
                 mapLayer={mapLayer}
@@ -1021,7 +1134,8 @@ function NetworkPage() {
                 <div className="passport-tabs__list">
                     {orderedTabKeys.map((key) => {
                         const item = tabs.get(key);
-                        const label = item ? item.data.label || 'Соединение' : 'Подсветка';
+                        let label = item ? item.data.label || 'Соединение' : 'Подсветка';
+                        if (item?.type === 'node' && !item.data.isLine) label = `Паспорт ${item.data.label || 'УС'}`;
                         const expanded = item ? !item.minimized : highlightOpen;
                         const active = expanded && (!item || key === activePassportId);
                         return <div className={`passport-tabs__item${active ? ' is-active' : ''}${item?.minimized ? ' is-minimized' : ''}`} key={key}
@@ -1039,7 +1153,7 @@ function NetworkPage() {
                             }}>
                             <button type="button" className="passport-tabs__restore" data-passport-tab={item ? key : undefined}
                                 aria-expanded={expanded} aria-controls={item ? undefined : 'highlight-dialog'}
-                                title={item ? `${expanded ? 'Свернуть' : 'Развернуть'} паспорт ${label}` : undefined}
+                                title={item ? `${expanded ? 'Свернуть' : 'Развернуть'} · ${label}` : undefined}
                                 draggable={orderedTabKeys.length > 1}
                                 onDragStart={(event) => {
                                     cancelPassportHover();
@@ -1054,7 +1168,7 @@ function NetworkPage() {
                                     else restorePassport(key);
                                 }}>{label}</button>
                             <button type="button" className="passport-tabs__close"
-                                aria-label={item ? `Закрыть паспорт ${label}` : 'Закрыть окно подсветки'}
+                                aria-label={item ? `Закрыть · ${label}` : 'Закрыть окно подсветки'}
                                 onClick={() => item ? closePassport(key) : closeHighlight()}>×</button>
                         </div>;
                     })}
@@ -1191,6 +1305,13 @@ function NetworkPage() {
                     onReattach={() => reattachPassport(passportKey(item))}
                     onPin={() => pinPassport(passportKey(item))}
                     onClose={() => closePassport(passportKey(item))}
+                    onOpenDetail={(type, data) => openPassportDetail(item, type, data)}
+                    routeHighlighted={Boolean(item.routeHighlighted)}
+                    onRouteHighlight={(checked) => {
+                        const key = passportKey(item);
+                        setPassports((current) => current.map((entry) => passportKey(entry) === key
+                            ? { ...entry, routeHighlighted: checked } : entry));
+                    }}
                 />
             ))}
         </div>

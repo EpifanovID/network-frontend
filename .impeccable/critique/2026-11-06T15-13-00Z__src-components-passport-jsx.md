@@ -11,7 +11,9 @@ target_path: "C:\\Users\\Ilia_29\\Desktop\\Наработки\\ЦИТиС\\Map\\
 timestamp: 2026-11-06T15-13-00Z
 slug: src-components-passport-jsx
 ---
-Method: dual-agent (A: /root/passport_design · B: /root/passport_evidence)
+Метод — независимая оценка двух агентов (`/root/passport_design` и `/root/passport_evidence`).
+
+Это архивная оценка версии паспорта от 6 ноября 2026 года. Для текущего поведения карточек см. [руководство по приложению](../../docs/PROJECT_GUIDE.md).
 
 Паспорт сети связи: рекомендации по дизайну, без изменения реализации.
 

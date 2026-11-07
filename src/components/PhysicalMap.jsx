@@ -55,6 +55,12 @@ const emptyCollection = { type: 'FeatureCollection', features: [] };
 const offlineStyle = {
     version: 8,
     sources: {
+        worldOverview: {
+            type: 'raster',
+            url: `pmtiles://${mapAssetsUrl}/world-overview.pmtiles`,
+            tileSize: 256,
+            attribution: 'Natural Earth',
+        },
         overview: {
             type: 'vector',
             url: `pmtiles://${offlineOverviewUrl}`,
@@ -84,8 +90,17 @@ const offlineStyle = {
     glyphs: `${mapAssetsUrl}/fonts/{fontstack}/{range}.pbf`,
     sprite: `${mapAssetsUrl}/sprites/light`,
     layers: [
-        ...layers('protomaps', LIGHT, { lang: 'ru' })
-            .filter((layer) => layer.id === 'background'),
+        {
+            id: 'background',
+            type: 'background',
+            paint: { 'background-color': LIGHT.water },
+        },
+        {
+            id: 'world-overview',
+            type: 'raster',
+            source: 'worldOverview',
+            paint: { 'raster-fade-duration': 0 },
+        },
         ...prepareBasemapLayers(overviewLayers),
         ...prepareBasemapLayers(detailLayers),
         {

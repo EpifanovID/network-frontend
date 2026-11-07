@@ -1,38 +1,18 @@
-# Offline map data and assets
+# Источники и лицензии офлайн-карты
 
-- Map data: © OpenStreetMap contributors, licensed under the
-  [Open Database License](https://www.openstreetmap.org/copyright).
-- Basemap generation and style: [Protomaps](https://github.com/protomaps/basemaps).
-  Style code is BSD-3-Clause (see
-  [PROTOMAPS-BSD-3-LICENSE.txt](./PROTOMAPS-BSD-3-LICENSE.txt)); visual design is CC0.
-- PMTiles browser protocol is BSD-3-Clause (see
-  [PMTILES-BSD-3-LICENSE.txt](./PMTILES-BSD-3-LICENSE.txt)).
-- MapLibre GL JS is BSD-3-Clause (see
-  [MAPLIBRE-BSD-3-LICENSE.txt](./MAPLIBRE-BSD-3-LICENSE.txt)).
-- Landcover: ESA WorldCover, licensed under
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-- Natural Earth data is in the public domain.
-- Map fonts are Noto Sans, distributed under the SIL Open Font License in
-  [OFL.txt](./OFL.txt).
-- The light sprite uses icons derived from Tangram Icons, licensed under MIT;
-  see [TANGRAM-ICONS-LICENSE.txt](./TANGRAM-ICONS-LICENSE.txt).
-- Military-district outlines use geoBoundaries ADM1 data derived from
-  OpenStreetMap and distributed under the ODbL. The administrative units are
-  grouped according to Presidential Decree No. 141 of February 26, 2024.
-- Regional boundaries use geoBoundaries ADM1 data derived from OpenStreetMap and
-  distributed under the ODbL. Run `npm run build:russia-regions` to regenerate
-  `russia-regions.geojson` from the pinned geoBoundaries revision.
-  Both overlays use the same membership defined in `scripts/map-boundaries.mjs`.
-  Six disputed territories use UKR source geometry and are explicitly marked
-  with `sourceCountry: "UKR"` and `disputed: true` in the regional file.
-  Their inclusion follows the existing district layer's Russian administrative
-  assignment, not international recognition or actual territorial control.
-  The four oblast boundaries show full administrative extents, not front lines.
+- Картографические данные © участники OpenStreetMap. Лицензия [Open Database License (ODbL)](https://www.openstreetmap.org/copyright).
+- Сборщик и оформление базовой карты — [Protomaps](https://github.com/protomaps/basemaps). Код стиля распространяется по [BSD-3-Clause](./PROTOMAPS-BSD-3-LICENSE.txt), визуальное оформление — по CC0.
+- Браузерный протокол PMTiles распространяется по [BSD-3-Clause](./PMTILES-BSD-3-LICENSE.txt).
+- MapLibre GL JS распространяется по [BSD-3-Clause](./MAPLIBRE-BSD-3-LICENSE.txt).
+- Данные о наземном покрове — ESA WorldCover по лицензии [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Данные Natural Earth находятся в общественном достоянии. `world-overview.pmtiles` содержит растровые плитки с сушей и озёрами в масштабе 1:50 млн из пакета Natural Earth 5.1.2.
+- Шрифты Noto Sans распространяются по [SIL Open Font License](./OFL.txt).
+- В наборе значков светлой карты использованы производные от Tangram Icons. Действует [лицензия MIT](./TANGRAM-ICONS-LICENSE.txt).
 
-The map displays visible OpenStreetMap and Protomaps attribution. Preserve
-these notices when redistributing the generated PMTiles archive or map assets.
+Для границ военных округов и регионов используется набор geoBoundaries ADM1, основанный на данных OpenStreetMap и распространяемый по ODbL. Группировка округов в проекте следует Указу Президента РФ № 141 от 26 февраля 2024 года. Оба слоя используют перечень территорий из `scripts/map-boundaries.mjs`. Команда `npm run build:russia-regions` пересобирает файл `russia-regions.geojson` из закреплённой версии исходных данных.
 
-`russia-outline.geojson` is the union of the five district polygons, with
-internal boundaries removed. It inherits their sources, license and territorial
-convention, including disputed territories; it does not show lines of control.
-Regenerate it locally with `npm run build:russia-outline`.
+Для шести спорных территорий использованы геометрии из набора UKR. В файле регионов они помечены полями `sourceCountry: "UKR"` и `disputed: true`. Их включение следует условности административной группировки, принятой в проекте. Контуры четырёх областей показывают полные административные границы. Данные о международном признании и текущих линиях контроля в этих слоях отсутствуют.
+
+`russia-outline.geojson` объединяет пять полигонов округов и исключает их внутренние границы. Контур наследует источники, лицензию и условности слоёв. Для его пересборки используйте `npm run build:russia-outline`.
+
+На карте отображаются указания на OpenStreetMap и Protomaps. При распространении архивов PMTiles или ресурсов карты сохраняйте эти указания и лицензионные уведомления.

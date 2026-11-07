@@ -54,7 +54,38 @@ test('dragged cards stay below the toolbar and inside a resized viewport', () =>
     assert.deepEqual(clampPassportPosition({ x: 1000, y: 1000, width: 280, height: 330 }, bounds), { x: 508, y: 258 });
 });
 
+test('layout preserves parked windows and keeps an exposed header after resize', () => {
+    const card = { key: 'parked', x: 680, y: 500, width: 280, height: 330, fixed: true };
+    const [parked] = arrangePassports([card], { left: 12, top: 80, right: 788, bottom: 588 });
+    const [resized] = arrangePassports([card], { left: 12, top: 80, right: 588, bottom: 488 });
+    assert.deepEqual([parked.x, parked.y], [680, 500]);
+    assert.deepEqual([resized.x, resized.y], [516, 452]);
+});
+
 test('reopening a detached passport preserves its manually chosen position', () => {
     const detached = { ...node('one', true), detachedPosition: { x: 500, y: 200 } };
     assert.deepEqual(openPassport([detached], node('one'))[0].detachedPosition, detached.detachedPosition);
+});
+
+test('characteristics align to the visible passport and switch sides when it moves', () => {
+    const bounds = { left: 12, top: 80, right: 1200, bottom: 880 };
+    const details = { key: 'characteristics:one', anchorKey: 'node:one', width: 560, height: 360 };
+    const parent = { key: 'node:one', x: 100, y: 240, width: 280, height: 300, fixed: true };
+    const [right] = arrangePassports([details, parent], bounds);
+    const [left] = arrangePassports([details, { ...parent, x: 850 }], bounds);
+    assert.deepEqual([right.x, right.y], [392, 210]);
+    assert.deepEqual([left.x, left.y], [278, 210]);
+});
+
+test('characteristics fall back to the node when its passport is hidden or detached', () => {
+    const details = {
+        key: 'characteristics:one', anchorKey: 'node:one', width: 560, height: 360,
+        fallbackAnchor: { x: 150, y: 380, width: 120, height: 50 },
+    };
+    const parent = { key: 'node:one', x: 850, y: 200, width: 280, height: 300, fixed: true, detached: true };
+    const bounds = { left: 12, top: 80, right: 1200, bottom: 880 };
+    const [withoutParent] = arrangePassports([details], bounds);
+    const [withDetachedParent] = arrangePassports([details, parent], bounds);
+    assert.deepEqual([withoutParent.x, withoutParent.y], [282, 225]);
+    assert.deepEqual(withDetachedParent, withoutParent);
 });

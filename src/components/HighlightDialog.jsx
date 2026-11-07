@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { emptyHighlight, highlightInterfaces } from '../utils/networkHighlight';
+import { clampFloatingWindowPosition } from '../utils/passports';
+
+function constrainDialog(point, width) {
+    return clampFloatingWindowPosition({ ...point, width }, {
+        left: 12, top: 12, right: window.innerWidth - 12, bottom: window.innerHeight - 12,
+    });
+}
 
 const manualHelp = 'Клик по узлу добавляет его в подборку. Повторный клик снимает отметку. Для быстрого выбора используйте Ctrl + клик.';
 
@@ -52,10 +59,22 @@ function TerritoryPair({ label, options, value, onChange }) {
 export default function HighlightDialog({ boundaries, draft, onDraftChange, open, onApply, onReset, onMinimize, onClose,
     section, onSectionChange, selectedNodes, hasAppliedManual, onStartManual, onApplyManual, onClearManual, onRemoveManualNode }) {
     const dialog = useRef(null);
+    const drag = useRef(null);
+    const [position, setPosition] = useState(null);
     const manualCount = selectedNodes.length;
     useEffect(() => {
         if (open) dialog.current.showModal();
         else dialog.current.close();
+    }, [open]);
+    useEffect(() => {
+        if (!open) return;
+        const keepReachable = () => {
+            const width = dialog.current.offsetWidth;
+            setPosition((point) => point && constrainDialog(point, width));
+        };
+        keepReachable();
+        window.addEventListener('resize', keepReachable);
+        return () => window.removeEventListener('resize', keepReachable);
     }, [open]);
     const change = (key) => (value) => onDraftChange((previous) => ({ ...previous, [key]: value }));
     const regions = (boundaries?.regions ?? []).map(({ properties }) => ({
@@ -69,6 +88,7 @@ export default function HighlightDialog({ boundaries, draft, onDraftChange, open
         .some(([first, second]) => Boolean(first) !== Boolean(second));
 
     return <dialog ref={dialog} id="highlight-dialog" className="highlight-dialog" aria-labelledby="highlight-heading"
+        style={position ? { position: 'fixed', inset: 'auto', margin: 0, left: position.x, top: position.y } : undefined}
         onCancel={(event) => { event.preventDefault(); onClose(); }}
         onKeyDown={(event) => { if (event.key === 'Escape') event.stopPropagation(); }}>
         <form onSubmit={(event) => {
@@ -77,7 +97,28 @@ export default function HighlightDialog({ boundaries, draft, onDraftChange, open
             onApply(draft);
             onMinimize();
         }}>
-            <header className="highlight-dialog__header">
+            <header className="highlight-dialog__header"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+                    if (!direction) return;
+                    event.preventDefault();
+                    const { x, y, width } = dialog.current.getBoundingClientRect();
+                    setPosition(constrainDialog({ x: x + direction[0] * 12, y: y + direction[1] * 12 }, width));
+                }}
+                onPointerDown={(event) => {
+                    if (event.button !== 0 || event.target.closest('button')) return;
+                    const { x, y, width } = dialog.current.getBoundingClientRect();
+                    drag.current = { id: event.pointerId, offsetX: event.clientX - x, offsetY: event.clientY - y, width };
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={(event) => {
+                    const start = drag.current;
+                    if (start?.id !== event.pointerId) return;
+                    setPosition(constrainDialog({ x: event.clientX - start.offsetX, y: event.clientY - start.offsetY }, start.width));
+                }}
+                onLostPointerCapture={() => { drag.current = null; }}>
                 <div>
                     <h2 id="highlight-heading">Подсветить</h2>
                 </div>

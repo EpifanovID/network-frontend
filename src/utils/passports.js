@@ -1,4 +1,19 @@
+export const passportDetailTitles = {
+    characteristics: 'Все характеристики УС',
+    'network-elements': 'Сетевые элементы УС',
+    channels: 'Каналы связи УС',
+    lines: 'Линии связи УС',
+    'line-characteristics': 'Все характеристики ЛС',
+    'line-channels': 'КС через ЛС',
+    'channel-passport': 'Паспорт КС',
+};
+
+export function isPassportDetail(type) {
+    return Object.hasOwn(passportDetailTitles, type);
+}
+
 export function passportKey(passport) {
+    if (isPassportDetail(passport.type)) return `${passport.type}:${passport.data.id}`;
     const lineId = passport.data.lineId ?? (passport.data.isLine ? passport.nodeId : null);
     if (lineId != null) return `line:${lineId}`;
     return `${passport.type}:${passport.nodeId ?? passport.data.id}`;
@@ -22,14 +37,35 @@ export function clampPassportPosition(card, bounds) {
     };
 }
 
+export function clampFloatingWindowPosition({ x, y, width }, bounds) {
+    const visibleWidth = Math.min(72, width, bounds.right - bounds.left);
+    const visibleHeight = 36;
+    return {
+        x: Math.max(bounds.left + visibleWidth - width, Math.min(x, bounds.right - visibleWidth)),
+        y: Math.max(bounds.top, Math.min(y, bounds.bottom - visibleHeight)),
+    };
+}
+
+export function sidePassportPosition(card, anchor, bounds) {
+    const gap = 12;
+    const right = anchor.x + anchor.width + gap;
+    const left = anchor.x - gap - card.width;
+    const rightSpace = bounds.right - right;
+    const leftSpace = anchor.x - gap - bounds.left;
+    return {
+        x: rightSpace >= card.width || rightSpace >= leftSpace ? right : left,
+        y: anchor.y + (anchor.height - card.height) / 2,
+    };
+}
+
 // Keep each card near its object, avoiding previously placed cards when space allows.
 export function arrangePassports(cards, bounds) {
     const placed = [];
     const gap = 12;
-    const ordered = [...cards.filter((card) => card.fixed), ...cards.filter((card) => !card.fixed)];
+    const ordered = [...cards.filter((card) => card.fixed), ...cards.filter((card) => !card.fixed && !card.anchorKey)];
     for (const card of ordered) {
         if (card.fixed) {
-            placed.push({ ...card, ...clampPassportPosition(card, bounds), overlap: 0, distance: 0 });
+            placed.push({ ...card, ...clampFloatingWindowPosition(card, bounds), overlap: 0, distance: 0 });
             continue;
         }
         const maxX = Math.max(bounds.left, bounds.right - card.width);
@@ -58,5 +94,16 @@ export function arrangePassports(cards, bounds) {
         placed.push(best);
     }
     const byKey = new Map(placed.map((card) => [card.key, card]));
+    for (const card of cards) {
+        if (!card.anchorKey) continue;
+        const parent = byKey.get(card.anchorKey);
+        const anchor = parent && !parent.detached ? parent : card.fallbackAnchor;
+        if (!anchor) {
+            byKey.set(card.key, { ...card, ...clampPassportPosition(card, bounds) });
+            continue;
+        }
+        const position = sidePassportPosition(card, anchor, bounds);
+        byKey.set(card.key, { ...card, ...clampPassportPosition({ ...card, ...position }, bounds) });
+    }
     return cards.map((card) => byKey.get(card.key));
 }
